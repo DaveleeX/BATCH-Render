@@ -8,12 +8,21 @@ export function hasLiveModel(): boolean {
   );
 }
 
+/** Prefer models that still accept new free-tier keys in 2026. */
+const GEMINI_CANDIDATES = [
+  process.env.GEMINI_MODEL,
+  "gemini-3.1-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3-flash-preview",
+  "gemini-2.0-flash",
+].filter(Boolean) as string[];
+
 export function getVisionModel(): LanguageModel | null {
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     const google = createGoogleGenerativeAI({
       apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
     });
-    return google("gemini-2.0-flash");
+    return google(GEMINI_CANDIDATES[0]);
   }
   if (process.env.OPENAI_API_KEY) {
     const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });

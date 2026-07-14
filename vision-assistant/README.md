@@ -37,6 +37,20 @@ npm run dev
 
 高德「扫街榜」与店内实时人数目前不是开放平台标准能力。本项目预留 `scanstreet-adapter`，现用周边搜索 + 评分衍生热度估算，拿到商务接口后可替换 `src/lib/amap.ts`。
 
-## 部署
+## 部署到 Vercel（获得稳定公网链接）
 
-可部署到 Vercel，并配置上述环境变量。摄像头/麦克风/定位需用户授权；iOS Safari 对语音识别支持较弱，可用文字输入兜底。
+### 在 Cursor 里授权 Vercel MCP（推荐）
+1. 打开 Cursor Desktop → **Settings → MCP**
+2. 找到 **Vercel**，状态若为 needsAuth / Connect，点击 **Authenticate / Connect**
+3. 浏览器完成 Vercel 账号登录与授权
+4. 回来后告诉 Agent「已授权 Vercel」，即可代为 `vercel link` + 部署并写入环境变量
+
+### 或给你自己的 Token
+1. 打开 https://vercel.com/account/tokens 创建 Token
+2. 在对话里私密提供（或加入 Cursor Cloud Environment secrets）
+3. Agent 可用 `vercel --token ...` 部署 `vision-assistant/`
+
+需要写入的环境变量：
+- `GOOGLE_GENERATIVE_AI_API_KEY`
+- `GEMINI_MODEL=gemini-3.1-flash-lite`（建议）
+- `AMAP_WEB_KEY`（必须是 Web 服务类型）
