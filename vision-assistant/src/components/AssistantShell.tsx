@@ -386,7 +386,7 @@ export function AssistantShell() {
       } else if (!snap.microphone) {
         setStatus("麦克风未授权，可改用文字模式");
       } else {
-        setStatus("按住说话 · 长按按钮切换 语音/文字/视频");
+        setStatus("按住说话 · 上滑切换语音/文字");
       }
       setPermReady(true);
       setCamBoot((n) => n + 1);
@@ -736,9 +736,8 @@ export function AssistantShell() {
             mode={actionMode}
             onModeChange={(m) => {
               setActionMode(m);
-              if (m === "voice") setStatus("按住说话 · 长按上滑切换模式");
-              if (m === "text") setStatus("文字模式 · 长按上滑可切换");
-              if (m === "video") setStatus("视频模式 · 麦克风提问，右侧切文字");
+              if (m === "voice") setStatus("按住说话 · 上滑切换文字");
+              if (m === "text") setStatus("文字模式 · 上滑可切回语音");
             }}
             onVoiceStart={onHoldStart}
             onVoiceEnd={onHoldEnd}
@@ -748,10 +747,6 @@ export function AssistantShell() {
               const v = textDraft;
               setTextDraft("");
               void ask(v);
-            }}
-            onEnterVideo={() => {
-              setCamBoot((n) => n + 1);
-              setStatus("视频已就绪 · 按住麦克风说话");
             }}
           />
 
