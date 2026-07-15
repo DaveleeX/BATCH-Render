@@ -7,15 +7,77 @@ type Props = {
   facingMode?: "user" | "environment";
 };
 
+type CamStatus = "idle" | "starting" | "live";
+
 export function CameraView({ onReady, facingMode = "environment" }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const facingRef = useRef(facingMode);
+  const onReadyRef = useRef(onReady);
+  const startGenRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "starting" | "live">("idle");
+  const [status, setStatus] = useState<CamStatus>("idle");
+  const [hasPreview, setHasPreview] = useState(false);
 
-  const stopStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+  facingRef.current = facingMode;
+  onReadyRef.current = onReady;
+
+  const detachStream = useCallback((stopTracks: boolean) => {
+    const stream = streamRef.current;
     streamRef.current = null;
+    const video = videoRef.current;
+    if (video?.srcObject === stream) {
+      video.srcObject = null;
+    }
+    if (stopTracks && stream) {
+      stream.getTracks().forEach((t) => {
+        t.onended = null;
+        t.stop();
+      });
+    }
+  }, []);
+
+  const attachStream = useCallback(async (stream: MediaStream, gen: number) => {
+    const video = videoRef.current;
+    if (!video) {
+      stream.getTracks().forEach((t) => t.stop());
+      return false;
+    }
+
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+
+    await new Promise<void>((resolve) => {
+      if (video.readyState >= 2) {
+        resolve();
+        return;
+      }
+      const onReadyMeta = () => {
+        video.removeEventListener("loadedmetadata", onReadyMeta);
+        resolve();
+      };
+      video.addEventListener("loadedmetadata", onReadyMeta);
+      // 兜底，避免个别机型不触发 loadedmetadata
+      window.setTimeout(resolve, 800);
+    });
+
+    if (gen !== startGenRef.current) return false;
+
+    try {
+      await video.play();
+    } catch {
+      // 有些机型第一次 play 会失败，再试一次
+      await new Promise((r) => window.setTimeout(r, 120));
+      if (gen !== startGenRef.current) return false;
+      await video.play();
+    }
+
+    if (gen !== startGenRef.current) return false;
+    return true;
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -23,52 +85,98 @@ export function CameraView({ onReady, facingMode = "environment" }: Props) {
       setError("当前浏览器不支持摄像头。请用手机 Chrome / Safari 打开 HTTPS 链接。");
       return;
     }
+
+    const gen = ++startGenRef.current;
     setStatus("starting");
     setError(null);
-    stopStream();
+
+    // 先拿新流，成功后再停旧流，避免中间黑屏过久/竞态把新流掐掉
+    let next: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (!video) {
-        stopStream();
+      const facing = facingRef.current;
+      try {
+        next = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: facing },
+          },
+        });
+      } catch {
+        // 个别手机对 facingMode 对象写法不兼容，再退一步
+        next = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: true,
+        });
+      }
+
+      if (gen !== startGenRef.current) {
+        next.getTracks().forEach((t) => t.stop());
         return;
       }
-      video.srcObject = stream;
-      video.setAttribute("playsinline", "true");
-      video.muted = true;
-      await video.play();
+
+      const old = streamRef.current;
+      streamRef.current = next;
+      next.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          if (streamRef.current !== next) return;
+          setStatus("idle");
+          setHasPreview(false);
+          setError("摄像头被系统中断了，请再点一次开启。");
+          detachStream(false);
+        };
+      });
+
+      const ok = await attachStream(next, gen);
+      if (!ok || gen !== startGenRef.current) {
+        if (streamRef.current === next) detachStream(true);
+        return;
+      }
+
+      if (old) {
+        old.getTracks().forEach((t) => {
+          t.onended = null;
+          t.stop();
+        });
+      }
+
       setStatus("live");
-      onReady?.(video);
+      setHasPreview(true);
+      if (videoRef.current) onReadyRef.current?.(videoRef.current);
     } catch (err) {
-      const name = err instanceof DOMException ? err.name : "Error";
+      if (next) next.getTracks().forEach((t) => t.stop());
+      if (gen !== startGenRef.current) return;
       setStatus("idle");
+      setHasPreview(false);      const name = err instanceof DOMException ? err.name : "Error";
       if (name === "NotAllowedError") {
         setError("相机权限被拒绝。请在浏览器地址栏旁允许摄像头后重试。");
       } else if (name === "NotFoundError") {
         setError("未检测到摄像头设备。");
+      } else if (name === "NotReadableError") {
+        setError("摄像头被其他应用占用，请关闭后重试。");
       } else {
-        setError("无法打开摄像头。请确认使用 HTTPS 公网链接，并允许相机权限。");
+        setError("无法打开摄像头。请确认使用 HTTPS，并允许相机权限。");
       }
     }
-  }, [facingMode, onReady, stopStream]);
+  }, [attachStream, detachStream]);
 
+  // 跳过首次 mount，只在用户切换前后摄时重启，避免误杀画面流
+  const facingBootRef = useRef(true);
   useEffect(() => {
-    // 切换前后摄时，若已开启则重启
-    if (status === "live") {
-      void startCamera();
+    if (facingBootRef.current) {
+      facingBootRef.current = false;
+      return;
     }
+    if (status !== "live") return;
+    void startCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode]);
 
-  useEffect(() => () => stopStream(), [stopStream]);
+  useEffect(() => {
+    return () => {
+      startGenRef.current += 1;
+      detachStream(true);
+    };
+  }, [detachStream]);
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0d1a16]">
@@ -85,14 +193,15 @@ export function CameraView({ onReady, facingMode = "environment" }: Props) {
         playsInline
         muted
         autoPlay
+        // 一旦拿到流就保持可见，避免 status 抖动导致“打开又关掉”
         className={[
-          "h-full w-full object-cover transition-opacity duration-500",
-          status === "live" ? "opacity-100" : "opacity-0",
+          "h-full w-full object-cover bg-black transition-opacity duration-300",
+          hasPreview || status === "starting" ? "opacity-100" : "opacity-0",
         ].join(" ")}
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(6,12,10,0.6)_100%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(6,12,10,0.55)_100%)]"
       />
 
       {status !== "live" ? (
