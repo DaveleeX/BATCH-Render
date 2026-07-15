@@ -5,109 +5,145 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Props = {
   onReady?: (video: HTMLVideoElement) => void;
   facingMode?: "user" | "environment";
+  /** 外部强制重启（切换镜头/手动重试） */
+  restartSignal?: number;
 };
 
-type CamStatus = "idle" | "starting" | "live";
+type CamStatus = "idle" | "starting" | "live" | "no_frames";
 
-export function CameraView({ onReady, facingMode = "environment" }: Props) {
+async function wait(ms: number) {
+  await new Promise((r) => window.setTimeout(r, ms));
+}
+
+async function waitForVideoFrame(video: HTMLVideoElement, timeoutMs = 2500) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (video.videoWidth > 0 && video.videoHeight > 0 && !video.paused) {
+      return true;
+    }
+    await wait(80);
+  }
+  return video.videoWidth > 0 && video.videoHeight > 0;
+}
+
+export function CameraView({
+  onReady,
+  facingMode = "environment",
+  restartSignal = 0,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const facingRef = useRef(facingMode);
   const onReadyRef = useRef(onReady);
   const startGenRef = useRef(0);
+  const bootFacingRef = useRef(true);
+
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<CamStatus>("idle");
-  const [hasPreview, setHasPreview] = useState(false);
+  const [debug, setDebug] = useState("未开启");
 
   facingRef.current = facingMode;
   onReadyRef.current = onReady;
 
-  const detachStream = useCallback((stopTracks: boolean) => {
+  const clearStream = useCallback((stopTracks: boolean) => {
     const stream = streamRef.current;
     streamRef.current = null;
     const video = videoRef.current;
-    if (video?.srcObject === stream) {
+    if (video) {
+      try {
+        video.pause();
+      } catch {
+        /* ignore */
+      }
       video.srcObject = null;
     }
     if (stopTracks && stream) {
-      stream.getTracks().forEach((t) => {
-        t.onended = null;
-        t.stop();
-      });
+      for (const track of stream.getTracks()) {
+        track.onended = null;
+        try {
+          track.stop();
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }, []);
 
-  const attachStream = useCallback(async (stream: MediaStream, gen: number) => {
+  const bindStreamToVideo = useCallback(async (stream: MediaStream) => {
     const video = videoRef.current;
-    if (!video) {
-      stream.getTracks().forEach((t) => t.stop());
-      return false;
-    }
+    if (!video) return false;
 
+    // iOS Safari：必须用这些属性，且建议先清空再绑定
     video.setAttribute("playsinline", "true");
     video.setAttribute("webkit-playsinline", "true");
+    video.setAttribute("autoplay", "true");
     video.muted = true;
     video.defaultMuted = true;
     video.playsInline = true;
+    video.autoplay = true;
+    video.controls = false;
+
+    video.srcObject = null;
+    await wait(30);
     video.srcObject = stream;
 
-    await new Promise<void>((resolve) => {
-      if (video.readyState >= 2) {
-        resolve();
-        return;
-      }
-      const onReadyMeta = () => {
-        video.removeEventListener("loadedmetadata", onReadyMeta);
-        resolve();
-      };
-      video.addEventListener("loadedmetadata", onReadyMeta);
-      // 兜底，避免个别机型不触发 loadedmetadata
-      window.setTimeout(resolve, 800);
-    });
-
-    if (gen !== startGenRef.current) return false;
+    // 等元数据
+    if (video.readyState < 1) {
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          const done = () => {
+            video.removeEventListener("loadedmetadata", done);
+            resolve();
+          };
+          video.addEventListener("loadedmetadata", done);
+        }),
+        wait(1200),
+      ]);
+    }
 
     try {
       await video.play();
     } catch {
-      // 有些机型第一次 play 会失败，再试一次
-      await new Promise((r) => window.setTimeout(r, 120));
-      if (gen !== startGenRef.current) return false;
+      await wait(100);
       await video.play();
     }
 
-    if (gen !== startGenRef.current) return false;
-    return true;
+    const ok = await waitForVideoFrame(video, 2800);
+    return ok;
   }, []);
 
   const startCamera = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError("当前浏览器不支持摄像头。请用手机 Chrome / Safari 打开 HTTPS 链接。");
+      setError("当前浏览器不支持摄像头。请用系统 Safari / Chrome 打开。");
+      setStatus("idle");
       return;
     }
 
     const gen = ++startGenRef.current;
     setStatus("starting");
     setError(null);
+    setDebug("请求权限…");
 
-    // 先拿新流，成功后再停旧流，避免中间黑屏过久/竞态把新流掐掉
     let next: MediaStream | null = null;
     try {
       const facing = facingRef.current;
-      try {
-        next = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: { ideal: facing },
-          },
-        });
-      } catch {
-        // 个别手机对 facingMode 对象写法不兼容，再退一步
-        next = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: true,
-        });
+      // iOS 对约束很敏感：优先极简约束，再回退
+      const attempts: MediaStreamConstraints[] = [
+        { audio: false, video: { facingMode: facing } },
+        { audio: false, video: { facingMode: { ideal: facing } } },
+        { audio: false, video: true },
+      ];
+
+      let lastErr: unknown = null;
+      for (const constraints of attempts) {
+        try {
+          next = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
       }
+      if (!next) throw lastErr ?? new Error("getUserMedia failed");
 
       if (gen !== startGenRef.current) {
         next.getTracks().forEach((t) => t.stop());
@@ -116,104 +152,148 @@ export function CameraView({ onReady, facingMode = "environment" }: Props) {
 
       const old = streamRef.current;
       streamRef.current = next;
-      next.getVideoTracks().forEach((track) => {
+
+      const track = next.getVideoTracks()[0];
+      setDebug(
+        track
+          ? `轨道:${track.label || track.readyState} (${facing})`
+          : "无视频轨道",
+      );
+      if (track) {
         track.onended = () => {
           if (streamRef.current !== next) return;
           setStatus("idle");
-          setHasPreview(false);
-          setError("摄像头被系统中断了，请再点一次开启。");
-          detachStream(false);
+          setDebug("轨道已结束");
+          setError("摄像头被系统中断，请重新开启。");
+          clearStream(false);
         };
-      });
+      }
 
-      const ok = await attachStream(next, gen);
-      if (!ok || gen !== startGenRef.current) {
-        if (streamRef.current === next) detachStream(true);
+      const ok = await bindStreamToVideo(next);
+      if (gen !== startGenRef.current) return;
+
+      if (old) {
+        for (const t of old.getTracks()) {
+          t.onended = null;
+          t.stop();
+        }
+      }
+
+      const video = videoRef.current;
+      if (!ok || !video || video.videoWidth === 0) {
+        setStatus("no_frames");
+        setDebug(
+          `无画面帧 ${video?.videoWidth || 0}x${video?.videoHeight || 0}`,
+        );
+        setError(
+          "已拿到相机权限，但画面没有出来。请点下方重试；若在 App 内置浏览器，请用 Safari 打开。",
+        );
+        // 仍把 video 交给上层，方便后面抓帧失败时有明确提示
+        if (video) onReadyRef.current?.(video);
         return;
       }
 
-      if (old) {
-        old.getTracks().forEach((t) => {
-          t.onended = null;
-          t.stop();
-        });
-      }
-
       setStatus("live");
-      setHasPreview(true);
-      if (videoRef.current) onReadyRef.current?.(videoRef.current);
+      setDebug(`画面 ${video.videoWidth}x${video.videoHeight}`);
+      setError(null);
+      onReadyRef.current?.(video);
     } catch (err) {
       if (next) next.getTracks().forEach((t) => t.stop());
       if (gen !== startGenRef.current) return;
+      clearStream(true);
       setStatus("idle");
-      setHasPreview(false);      const name = err instanceof DOMException ? err.name : "Error";
+      setDebug("启动失败");
+      const name = err instanceof DOMException ? err.name : "Error";
       if (name === "NotAllowedError") {
-        setError("相机权限被拒绝。请在浏览器地址栏旁允许摄像头后重试。");
+        setError("相机权限被拒绝。请在地址栏站点设置里允许摄像头。");
       } else if (name === "NotFoundError") {
-        setError("未检测到摄像头设备。");
+        setError("未检测到摄像头。");
       } else if (name === "NotReadableError") {
-        setError("摄像头被其他应用占用，请关闭后重试。");
+        setError("摄像头被占用。请关闭其他占用相机的 App 后重试。");
       } else {
-        setError("无法打开摄像头。请确认使用 HTTPS，并允许相机权限。");
+        setError("无法打开摄像头。请用系统 Safari 打开本站并允许相机。");
       }
     }
-  }, [attachStream, detachStream]);
+  }, [bindStreamToVideo, clearStream]);
 
-  // 跳过首次 mount，只在用户切换前后摄时重启，避免误杀画面流
-  const facingBootRef = useRef(true);
+  // 外部切换镜头 / 手动重试
   useEffect(() => {
-    if (facingBootRef.current) {
-      facingBootRef.current = false;
+    if (bootFacingRef.current) {
+      bootFacingRef.current = false;
       return;
     }
-    if (status !== "live") return;
     void startCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facingMode]);
+  }, [facingMode, restartSignal]);
 
   useEffect(() => {
     return () => {
       startGenRef.current += 1;
-      detachStream(true);
+      clearStream(true);
     };
-  }, [detachStream]);
+  }, [clearStream]);
+
+  // live 后持续巡检，防止静默黑屏
+  useEffect(() => {
+    if (status !== "live" && status !== "no_frames") return;
+    const id = window.setInterval(() => {
+      const video = videoRef.current;
+      const track = streamRef.current?.getVideoTracks()[0];
+      if (!video || !track || track.readyState !== "live") {
+        setStatus("idle");
+        setDebug("流已丢失");
+        setError("摄像头已断开，请重新开启。");
+        return;
+      }
+      if (video.videoWidth === 0) {
+        setStatus("no_frames");
+        setDebug("巡检: 无画面");
+      } else {
+        setStatus("live");
+        setDebug(`画面 ${video.videoWidth}x${video.videoHeight}`);
+      }
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [status]);
+
+  const showGate = status === "idle" || status === "starting" || status === "no_frames";
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-[#0d1a16]">
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at 20% 15%, #1a4a3c 0%, transparent 40%), radial-gradient(circle at 80% 80%, #0f3a48 0%, transparent 45%), linear-gradient(160deg, #12261f, #0b1210 55%, #143028)",
-        }}
-      />
+    <div className="absolute inset-0 overflow-hidden bg-black">
       <video
         ref={videoRef}
-        playsInline
         muted
+        playsInline
         autoPlay
-        // 一旦拿到流就保持可见，避免 status 抖动导致“打开又关掉”
-        className={[
-          "h-full w-full object-cover bg-black transition-opacity duration-300",
-          hasPreview || status === "starting" ? "opacity-100" : "opacity-0",
-        ].join(" ")}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(6,12,10,0.55)_100%)]"
+        className="absolute inset-0 z-0 h-full w-full object-cover"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          backgroundColor: "#000",
+          transform: facingMode === "user" ? "scaleX(-1)" : undefined,
+        }}
       />
 
-      {status !== "live" ? (
-        <div className="absolute inset-x-5 top-[38%] z-10 -translate-y-1/2 text-center">
+      {/* 轻遮罩，避免把画面盖死 */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-black/35 via-transparent to-black/45"
+      />
+
+      {showGate ? (
+        <div className="absolute inset-x-5 top-[34%] z-10 -translate-y-1/2 text-center">
           <p className="font-[family-name:var(--font-display)] text-5xl text-[#f6fff9]">
             览界
           </p>
           <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#d5efe4]">
             {status === "starting"
               ? "正在打开摄像头…"
-              : "先开启摄像头，再按住说话提问"}
+              : status === "no_frames"
+                ? "权限已开启，但还没刷出画面"
+                : "先开启摄像头，再按住说话提问"}
           </p>
+          <p className="mt-2 text-[11px] text-[#9ad9c3]/80">{debug}</p>
           {error ? (
             <p className="mx-auto mt-3 max-w-sm rounded-2xl bg-[#f3efe6] px-4 py-3 text-sm text-[#132019]">
               {error}
@@ -225,9 +305,19 @@ export function CameraView({ onReady, facingMode = "environment" }: Props) {
             disabled={status === "starting"}
             className="mt-5 rounded-full bg-[#1ec8a0] px-6 py-3 text-sm font-semibold text-[#07140f] disabled:opacity-60"
           >
-            {status === "starting" ? "开启中…" : "点击开启摄像头"}
+            {status === "starting"
+              ? "开启中…"
+              : status === "no_frames"
+                ? "重试摄像头"
+                : "点击开启摄像头"}
           </button>
         </div>
+      ) : null}
+
+      {status === "live" ? (
+        <p className="pointer-events-none absolute left-4 top-[max(5.5rem,env(safe-area-inset-top))] z-[5] rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-[#b9ebda]">
+          {debug}
+        </p>
       ) : null}
     </div>
   );

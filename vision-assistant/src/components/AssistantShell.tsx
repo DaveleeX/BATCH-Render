@@ -50,6 +50,7 @@ export function AssistantShell() {
   const [textDraft, setTextDraft] = useState("");
   const [mode, setMode] = useState<"demo" | "live">("demo");
   const [facing, setFacing] = useState<"user" | "environment">("environment");
+  const [camRestart, setCamRestart] = useState(0);
 
   useEffect(() => {
     fetch("/api/health")
@@ -192,7 +193,11 @@ export function AssistantShell() {
 
   return (
     <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#0d1a16] text-[#f3f7f4]">
-      <CameraView facingMode={facing} onReady={onReady} />
+      <CameraView
+        facingMode={facing}
+        onReady={onReady}
+        restartSignal={camRestart}
+      />
 
       <header className="absolute inset-x-0 top-0 z-40 px-5 pt-[max(1.1rem,env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-md items-start justify-between gap-3">
@@ -223,15 +228,24 @@ export function AssistantShell() {
       <div className="absolute inset-x-0 bottom-0 z-30 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
         <div className="mx-auto max-w-md">
           <div className="mb-3 flex items-center justify-between gap-3 px-1">
-            <button
-              type="button"
-              className="rounded-full bg-black/40 px-3 py-1.5 text-xs text-[#d7fff2] backdrop-blur-md"
-              onClick={() =>
-                setFacing((f) => (f === "environment" ? "user" : "environment"))
-              }
-            >
-              切换镜头
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded-full bg-black/40 px-3 py-1.5 text-xs text-[#d7fff2] backdrop-blur-md"
+                onClick={() =>
+                  setFacing((f) => (f === "environment" ? "user" : "environment"))
+                }
+              >
+                切换镜头
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-black/40 px-3 py-1.5 text-xs text-[#d7fff2] backdrop-blur-md"
+                onClick={() => setCamRestart((n) => n + 1)}
+              >
+                重试摄像头
+              </button>
+            </div>
             <p className="text-[11px] text-[#c6e6da]/80">
               {geo
                 ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`
