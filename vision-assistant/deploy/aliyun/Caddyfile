@@ -1,0 +1,9 @@
+daveleex.top, www.daveleex.top {
+	encode gzip
+	reverse_proxy lanjie:3000
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}

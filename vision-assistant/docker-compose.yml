@@ -1,0 +1,13 @@
+services:
+  lanjie:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      AI_PROVIDER: doubao
+      ARK_API_KEY: ${ARK_API_KEY}
+      DOUBAO_MODEL: ${DOUBAO_MODEL}
+      AMAP_WEB_KEY: ${AMAP_WEB_KEY}
+      NEXT_PUBLIC_AMAP_JS_KEY: ${NEXT_PUBLIC_AMAP_JS_KEY:-}
+      NEXT_PUBLIC_AMAP_SECURITY_JS_CODE: ${NEXT_PUBLIC_AMAP_SECURITY_JS_CODE:-}
+    restart: unless-stopped
