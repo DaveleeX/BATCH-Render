@@ -1,5 +1,5 @@
 import { listProfiles } from "./profiles";
-import { getVisionModel, quickVisionText } from "./model";
+import { hasLiveModel, quickVisionText } from "./model";
 import type { PublicProfile } from "./types";
 
 export type MatchResult = {
@@ -30,7 +30,7 @@ export async function matchPeopleInFrame(params: {
   const discoverable = await listProfiles(true);
   if (!discoverable.length) return [];
 
-  if (!params.imageDataUrl || !getVisionModel()) {
+  if (!params.imageDataUrl || !hasLiveModel()) {
     return naiveNameHint(params.text, discoverable).slice(0, 3);
   }
 

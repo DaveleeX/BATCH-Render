@@ -1,8 +1,10 @@
-import { generateText, tool, stepCountIs } from "ai";
-import { z } from "zod";
 import { NextResponse } from "next/server";
 import { searchNearbyPois } from "@/lib/amap";
-import { getActiveProvider, getVisionModel, hasLiveModel } from "@/lib/model";
+import {
+  generateAssistantReply,
+  getActiveProvider,
+  hasLiveModel,
+} from "@/lib/model";
 import { matchPeopleInFrame } from "@/lib/people";
 import type { ChatRequestBody, ChatResponseBody, PoiResult } from "@/lib/types";
 
@@ -17,7 +19,9 @@ function detectIntent(text: string) {
         t,
       ) || /^(咖啡|咖啡馆|餐厅|娱乐)$/.test(t.trim()),
     wantWho: /这是谁|他是谁|她是谁|人脸|这人是|认识他|认识她|身份是谁/.test(t),
-    wantWhat: /这是什么|什么东西|识别|看一下|这是啥|前面是什么|路上是什么/.test(t),
+    wantWhat: /这是什么|什么东西|识别|看一下|这是啥|前面是什么|路上是什么/.test(
+      t,
+    ),
     wantWhere: /这是哪里|什么地方|在哪|定位|地址/.test(t),
   };
 }
@@ -43,12 +47,12 @@ function demoReply(params: {
     return `50 米内推荐：\n${lines}`;
   }
   if (intent.wantWhere && params.geo) {
-    return `当前位置约 ${params.geo.lat.toFixed(5)}, ${params.geo.lng.toFixed(5)}。配置 AI Key 后可结合画面说明更具体的地点。`;
+    return `当前位置约 ${params.geo.lat.toFixed(5)}, ${params.geo.lng.toFixed(5)}。`;
   }
   if (intent.wantWhat) {
-    return "演示模式：已收到画面。配置 GOOGLE_GENERATIVE_AI_API_KEY 或 OPENAI_API_KEY 后，我可以直接告诉你画面里是什么。";
+    return "已收到画面。配置豆包/千问后可直接告诉你这是什么。";
   }
-  return "我在。你可以问：这是什么、这是谁、附近有什么热门咖啡馆。当前为演示模式。";
+  return "我在。你可以问：这是什么、这是谁、附近有什么热门咖啡馆。";
 }
 
 export async function POST(req: Request) {
@@ -90,138 +94,89 @@ export async function POST(req: Request) {
       });
       usedTools.push("people_match");
     } catch {
-      // 身份库读写失败时不阻断主对话
       matchedPeople = [];
     }
   }
 
-  const model = getVisionModel();
-  if (!model || !hasLiveModel()) {
+  if (!hasLiveModel()) {
     const reply = demoReply({
       text,
       pois,
       people: matchedPeople,
       geo: body.geo,
     });
-    const payload: ChatResponseBody = {
+    return NextResponse.json({
       reply,
       pois,
       matchedPeople,
       mode: "demo",
       usedTools,
       provider: getActiveProvider(),
-    };
-    return NextResponse.json(payload);
+    } satisfies ChatResponseBody);
   }
 
   const history = (body.history || []).slice(-6);
-  const collectedPois: PoiResult[] = [...pois];
-  const collectedPeople = [...(matchedPeople || [])];
+  const poiHint = pois.length
+    ? pois
+        .slice(0, 3)
+        .map(
+          (p) =>
+            `${p.name}${p.distanceMeters != null ? ` ${p.distanceMeters}米` : ""}${p.crowdLabel ? ` ${p.crowdLabel}` : ""}`,
+        )
+        .join("；")
+    : "无";
+  const peopleHint = matchedPeople?.length
+    ? matchedPeople
+        .map((p) => `${p.displayName}${p.occupation ? `/${p.occupation}` : ""}`)
+        .join("；")
+    : "无";
 
   const system = `你是「览界」眼镜助手（手机 Demo）。像面对面说话：短、准、不啰嗦。
 硬规则：
-1. 中文回复，默认 1-2 句，最多 60 字；列 POI 时最多 3 条短列表。
-2. 禁止复读用户原话，禁止重复上一轮相同句式或固定开场白。
-3. 不要输出「我是 AI」「作为助手」等套话；直接给答案。
-4. 画面不清楚就说「没看清，对准再问」，不要编造。
-5. 问附近地点时用 search_nearby；问「这是谁」用 match_people。
-6. 人数只有估算时说「大约」；不要贴长说明/免责声明。
-7. 回答要适合语音朗读：少括号、少 Markdown。
+1. 中文，默认 1-2 句，最多 60 字；附近地点最多列 3 条。
+2. 禁止复读用户原话，禁止套话开场。
+3. 画面不清楚就说「没看清，对准再问」，不要编造。
+4. 人数只有估算时说「大约」。适合语音朗读，少括号少 Markdown。
 地理：${body.geo ? `${body.geo.lat.toFixed(5)}, ${body.geo.lng.toFixed(5)}` : "未知"}
-预取POI：${collectedPois.length ? collectedPois.slice(0, 3).map((p) => p.name).join("、") : "无"}
-预取人物：${collectedPeople.length ? collectedPeople.map((p) => p.displayName).join("、") : "无"}`;
+附近候选：${poiHint}
+已匹配人物：${peopleHint}`;
 
   try {
-    const result = await generateText({
-      model,
+    let reply = await generateAssistantReply({
       system,
-      temperature: 0.4,
-      messages: [
-        ...history.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        {
-          role: "user",
-          content: [
-            ...(body.imageDataUrl
-              ? ([{ type: "image" as const, image: body.imageDataUrl }] as const)
-              : []),
-            { type: "text" as const, text },
-          ],
-        },
-      ],
-      tools: {
-        search_nearby: tool({
-          description: "基于高德周边搜索推荐附近地点（含扫街榜适配层热度）",
-          inputSchema: z.object({
-            keywords: z.string().default("咖啡"),
-            radiusMeters: z.number().min(20).max(2000).default(50),
-          }),
-          execute: async ({ keywords, radiusMeters }) => {
-            usedTools.push("amap_nearby_tool");
-            if (!body.geo) return { error: "no_geo", pois: [] };
-            const r = await searchNearbyPois({
-              geo: body.geo,
-              keywords,
-              radiusMeters,
-              limit: 5,
-            });
-            collectedPois.splice(0, collectedPois.length, ...r.pois);
-            return r;
-          },
-        }),
-        match_people: tool({
-          description: "匹配画面中已选择公开的人物身份",
-          inputSchema: z.object({}),
-          execute: async () => {
-            usedTools.push("people_match_tool");
-            const matches = await matchPeopleInFrame({
-              imageDataUrl: body.imageDataUrl,
-              text,
-            });
-            collectedPeople.splice(0, collectedPeople.length, ...matches);
-            return { matches };
-          },
-        }),
-      },
-      stopWhen: stepCountIs(3),
-      maxOutputTokens: 220,
+      text,
+      imageDataUrl: body.imageDataUrl,
+      history,
     });
-
-    let reply =
-      result.text.trim() ||
-      demoReply({
+    reply = reply.replace(/（[^）]*演示[^）]*）/g, "").trim();
+    if (!reply) {
+      reply = demoReply({
         text,
-        pois: collectedPois,
-        people: collectedPeople,
+        pois,
+        people: matchedPeople,
         geo: body.geo,
       });
+    }
 
-    // 去掉模型爱重复的括号备注
-    reply = reply.replace(/（[^）]*演示[^）]*）/g, "").trim();
-
-    const payload: ChatResponseBody = {
+    return NextResponse.json({
       reply,
-      pois: collectedPois,
-      matchedPeople: collectedPeople,
+      pois,
+      matchedPeople,
       mode: "live",
       usedTools: Array.from(new Set(usedTools)),
       provider: getActiveProvider(),
-    };
-    return NextResponse.json(payload);
+    } satisfies ChatResponseBody);
   } catch (err) {
     const message = err instanceof Error ? err.message : "model_error";
-    const reply = demoReply({
-      text,
-      pois: collectedPois,
-      people: collectedPeople,
-      geo: body.geo,
-    });
     return NextResponse.json({
-      reply,
-      pois: collectedPois,
-      matchedPeople: collectedPeople,
+      reply: demoReply({
+        text,
+        pois,
+        people: matchedPeople,
+        geo: body.geo,
+      }),
+      pois,
+      matchedPeople,
       mode: "demo",
       usedTools,
       provider: getActiveProvider(),

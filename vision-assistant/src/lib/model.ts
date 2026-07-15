@@ -1,13 +1,18 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, type LanguageModel } from "ai";
+import {
+  canUseDoubao,
+  doubaoRespond,
+  getDoubaoModelId,
+} from "./doubao";
 
 export type AiProvider = "qwen" | "doubao" | "gemini" | "openai";
 
 type ResolvedModel = {
   provider: AiProvider;
   modelId: string;
-  model: LanguageModel;
+  model: LanguageModel | null;
 };
 
 function preferredProvider(): AiProvider | null {
@@ -40,39 +45,17 @@ function resolveQwen(): ResolvedModel | null {
   return {
     provider: "qwen",
     modelId,
-    // 视觉对话使用 chat 兼容接口
     model: client.chat(modelId),
   };
 }
 
 function resolveDoubao(): ResolvedModel | null {
-  const apiKey =
-    process.env.ARK_API_KEY ||
-    process.env.DOUBAO_API_KEY ||
-    process.env.VOLCENGINE_API_KEY;
-  if (!apiKey) return null;
-
-  const baseURL =
-    process.env.ARK_BASE_URL ||
-    "https://ark.cn-beijing.volces.com/api/v3";
-
-  // 火山方舟需「已开通」的模型名，或控制台创建的接入点 ID（ep-xxxx）
-  const modelId =
-    process.env.DOUBAO_MODEL ||
-    process.env.ARK_ENDPOINT_ID ||
-    process.env.ARK_MODEL;
-  if (!modelId) return null;
-
-  const client = createOpenAI({
-    apiKey,
-    baseURL,
-    name: "doubao",
-  });
-
+  if (!canUseDoubao()) return null;
+  // 豆包走专用 Responses API；这里仍返回占位，供 provider 识别
   return {
     provider: "doubao",
-    modelId,
-    model: client.chat(modelId),
+    modelId: getDoubaoModelId(),
+    model: null,
   };
 }
 
@@ -85,7 +68,7 @@ export function doubaoKeyPresent(): boolean {
 }
 
 export function doubaoReady(): boolean {
-  return Boolean(resolveDoubao());
+  return canUseDoubao();
 }
 
 function resolveGemini(): ResolvedModel | null {
@@ -93,9 +76,7 @@ function resolveGemini(): ResolvedModel | null {
   const google = createGoogleGenerativeAI({
     apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
   });
-  const modelId =
-    process.env.GEMINI_MODEL ||
-    "gemini-3.1-flash-lite";
+  const modelId = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
   return {
     provider: "gemini",
     modelId,
@@ -128,10 +109,10 @@ export function resolveVisionModel(): ResolvedModel | null {
     if (hit) return hit;
   }
 
-  // 国内优先：通义 > 豆包 > Gemini > OpenAI
+  // 国内优先：豆包 > 通义 > Gemini > OpenAI
   return (
-    resolveQwen() ||
     resolveDoubao() ||
+    resolveQwen() ||
     resolveGemini() ||
     resolveOpenAI() ||
     null
@@ -155,7 +136,19 @@ export async function quickVisionText(params: {
   prompt: string;
   imageDataUrl?: string;
 }): Promise<string | null> {
-  const model = getVisionModel();
+  const resolved = resolveVisionModel();
+  if (!resolved) return null;
+
+  if (resolved.provider === "doubao") {
+    return doubaoRespond({
+      system: params.system,
+      prompt: params.prompt,
+      imageDataUrl: params.imageDataUrl,
+      maxOutputTokens: 400,
+    });
+  }
+
+  const model = resolved.model;
   if (!model) return null;
 
   const content: Array<
@@ -171,6 +164,52 @@ export async function quickVisionText(params: {
     system: params.system,
     messages: [{ role: "user", content }],
     maxOutputTokens: 400,
+  });
+  return result.text.trim();
+}
+
+export async function generateAssistantReply(params: {
+  system: string;
+  text: string;
+  imageDataUrl?: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<string> {
+  const resolved = resolveVisionModel();
+  if (!resolved) throw new Error("no_model");
+
+  if (resolved.provider === "doubao") {
+    return doubaoRespond({
+      system: params.system,
+      prompt: params.text,
+      imageDataUrl: params.imageDataUrl,
+      history: params.history,
+      maxOutputTokens: 320,
+    });
+  }
+
+  const model = resolved.model;
+  if (!model) throw new Error("no_model");
+
+  const result = await generateText({
+    model,
+    system: params.system,
+    temperature: 0.4,
+    messages: [
+      ...(params.history || []).map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      {
+        role: "user" as const,
+        content: [
+          ...(params.imageDataUrl
+            ? ([{ type: "image" as const, image: params.imageDataUrl }] as const)
+            : []),
+          { type: "text" as const, text: params.text },
+        ],
+      },
+    ],
+    maxOutputTokens: 220,
   });
   return result.text.trim();
 }
