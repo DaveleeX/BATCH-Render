@@ -104,6 +104,8 @@ export async function doubaoRespond(params: {
       model: getDoubaoModelId(),
       input,
       max_output_tokens: params.maxOutputTokens ?? 400,
+      // Seed 默认会把额度耗在 reasoning 上，导致正式回复为空
+      thinking: { type: "disabled" },
     }),
   });
 
@@ -114,7 +116,19 @@ export async function doubaoRespond(params: {
     );
   }
 
-  const text = extractText(data);
+  let text = extractText(data);
+  if (!text) {
+    // 兜底：若仍只有 reasoning summary
+    const reasonBits: string[] = [];
+    for (const item of data.output || []) {
+      if (item.type === "reasoning" && Array.isArray(item.summary)) {
+        for (const s of item.summary) {
+          if (s.text) reasonBits.push(s.text);
+        }
+      }
+    }
+    text = reasonBits.join("\n").trim();
+  }
   if (!text) throw new Error("doubao_empty_response");
   return text;
 }
