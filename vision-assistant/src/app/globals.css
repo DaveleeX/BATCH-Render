@@ -5,6 +5,11 @@
   --foreground: #f3f7f4;
   --accent: #1ec8a0;
   --sand: #f3efe6;
+  /* 不依赖 Google Fonts，保证国内免 VPN 可加载 */
+  --font-display: "Avenir Next Condensed", "DIN Alternate", "PingFang SC",
+    "HarmonyOS Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-sans: "PingFang SC", "HarmonyOS Sans SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", sans-serif;
 }
 
 @theme inline {
@@ -24,6 +29,11 @@ body {
   min-height: 100%;
   background: var(--background);
   color: var(--foreground);
+}
+
+.lanjie-body {
+  font-family: var(--font-sans);
+  letter-spacing: 0.01em;
 }
 
 button,

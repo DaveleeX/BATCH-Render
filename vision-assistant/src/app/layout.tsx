@@ -1,18 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_SC, Syne } from "next/font/google";
 import "./globals.css";
-
-const display = Syne({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-});
-
-const sans = Noto_Sans_SC({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-});
 
 export const metadata: Metadata = {
   title: "览界 · 视觉语音助手 Demo",
@@ -35,8 +22,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={`${display.variable} ${sans.variable} h-full`}>
-      <body className="min-h-full bg-[#0b1210] font-[family-name:var(--font-sans)] text-[#f3f7f4] antialiased">
+    <html lang="zh-CN" className="h-full">
+      <body className="lanjie-body min-h-full text-[#f3f7f4] antialiased">
         {children}
       </body>
     </html>

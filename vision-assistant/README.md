@@ -4,7 +4,9 @@
 
 ## 线上地址
 
-生产环境（稳定公网）：
+> **注意：Vercel 在大陆常需 VPN。** 要用豆包+高德免 VPN，请把站点部署到国内云，见 [`DEPLOY_CN.md`](./DEPLOY_CN.md)。
+
+海外临时地址（可能需 VPN）：
 
 **https://vision-assistant.vercel.app**
 
