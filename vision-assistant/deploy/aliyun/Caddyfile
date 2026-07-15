@@ -1,5 +1,4 @@
-# 把 your-domain.com 换成你的阿里云域名
-your-domain.com {
+daveleex.top, www.daveleex.top {
 	encode gzip
 	reverse_proxy lanjie:3000
 
