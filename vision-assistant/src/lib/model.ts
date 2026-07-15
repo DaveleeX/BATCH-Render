@@ -56,7 +56,7 @@ function resolveDoubao(): ResolvedModel | null {
     process.env.ARK_BASE_URL ||
     "https://ark.cn-beijing.volces.com/api/v3";
 
-  // 火山方舟通常使用接入点 ID（ep-xxxx）；也兼容直接写模型名
+  // 火山方舟需「已开通」的模型名，或控制台创建的接入点 ID（ep-xxxx）
   const modelId =
     process.env.DOUBAO_MODEL ||
     process.env.ARK_ENDPOINT_ID ||
@@ -74,6 +74,18 @@ function resolveDoubao(): ResolvedModel | null {
     modelId,
     model: client.chat(modelId),
   };
+}
+
+export function doubaoKeyPresent(): boolean {
+  return Boolean(
+    process.env.ARK_API_KEY ||
+      process.env.DOUBAO_API_KEY ||
+      process.env.VOLCENGINE_API_KEY,
+  );
+}
+
+export function doubaoReady(): boolean {
+  return Boolean(resolveDoubao());
 }
 
 function resolveGemini(): ResolvedModel | null {
