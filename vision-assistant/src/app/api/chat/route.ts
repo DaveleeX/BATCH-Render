@@ -14,7 +14,7 @@ function detectIntent(text: string) {
   return {
     wantNearby:
       /附近|周边|哪儿|哪里|咖啡|娱乐|网红|热门|餐厅|吃饭|玩|店/.test(t),
-    wantWho: /谁|人脸|这人|他是|她是|认识|身份|职业/.test(t),
+    wantWho: /这是谁|他是谁|她是谁|人脸|这人是|认识他|认识她|身份是谁/.test(t),
     wantWhat: /这是什么|什么东西|识别|看一下|这是啥/.test(t),
     wantWhere: /这是哪里|什么地方|在哪|定位|地址/.test(t),
   };

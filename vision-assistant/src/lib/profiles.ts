@@ -3,23 +3,42 @@ import path from "path";
 import { nanoid } from "nanoid";
 import type { PublicProfile } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// Vercel 函数文件系统只读，持久目录用 /tmp；本地仍用项目 data/
+const DATA_DIR =
+  process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? path.join("/tmp", "lanjie-data")
+    : path.join(process.cwd(), "data");
 const STORE_PATH = path.join(DATA_DIR, "profiles.json");
 
+let memoryStore: PublicProfile[] | null = null;
+
 async function ensureStore(): Promise<PublicProfile[]> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  if (memoryStore) return memoryStore;
   try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
     const raw = await fs.readFile(STORE_PATH, "utf8");
-    return JSON.parse(raw) as PublicProfile[];
+    memoryStore = JSON.parse(raw) as PublicProfile[];
+    return memoryStore;
   } catch {
-    await fs.writeFile(STORE_PATH, "[]", "utf8");
-    return [];
+    memoryStore = [];
+    try {
+      await fs.mkdir(DATA_DIR, { recursive: true });
+      await fs.writeFile(STORE_PATH, "[]", "utf8");
+    } catch {
+      // /tmp 也失败时纯内存兜底，避免整站 500
+    }
+    return memoryStore;
   }
 }
 
 async function writeStore(profiles: PublicProfile[]) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(profiles, null, 2), "utf8");
+  memoryStore = profiles;
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(STORE_PATH, JSON.stringify(profiles, null, 2), "utf8");
+  } catch {
+    // 忽略磁盘写入失败，会话内仍可用内存
+  }
 }
 
 export async function listProfiles(onlyDiscoverable = false) {

@@ -56,7 +56,10 @@ export function AssistantShell() {
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.json())
-      .then((d) => setMode(d.ai === "live" ? "live" : "demo"))
+      .then((d) => {
+        setMode(d.ai === "live" ? "live" : "demo");
+        setProvider(String(d.provider || "demo"));
+      })
       .catch(() => setMode("demo"));
 
     if (!navigator.geolocation) {
@@ -212,7 +215,7 @@ export function AssistantShell() {
           </div>
           <div className="flex flex-col items-end gap-2">
             <span className="rounded-full bg-[#f3efe6] px-2.5 py-1 text-[11px] font-semibold tracking-wide text-[#132019]">
-              {mode === "live" ? "LIVE" : "DEMO"}
+              {mode === "live" ? provider.toUpperCase() : "DEMO"}
             </span>
             <Link
               href="/profile"
