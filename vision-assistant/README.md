@@ -20,6 +20,7 @@
 
 - 全屏摄像头；按住说话（Web Speech）或多轮文字输入
 - 每轮自动抓帧，结合对话历史与 GPS
+- 多模型：通义千问（DashScope）/ 豆包（火山方舟）/ Gemini / OpenAI
 - 高德周边搜索（50m）；扫街榜实时人数目前**无公开 API**，使用热度适配层/演示数据
 - 「我的身份」：上传人脸 + 职业，开启可发现后，他人可问「这是谁」
 
@@ -28,8 +29,8 @@
 ```bash
 cd vision-assistant
 cp .env.example .env.local
-# 填入 GOOGLE_GENERATIVE_AI_API_KEY 或 OPENAI_API_KEY
-# 可选：AMAP_WEB_KEY
+# 推荐国内：DASHSCOPE_API_KEY + QWEN_MODEL=qwen-vl-plus
+# 或豆包：ARK_API_KEY + DOUBAO_MODEL=ep-xxxx
 npm install
 npm run dev
 ```
@@ -40,12 +41,16 @@ npm run dev
 
 | 变量 | 说明 |
 | --- | --- |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | 推荐，Gemini 2.0 Flash 视觉快 |
-| `OPENAI_API_KEY` | 备选 gpt-4o-mini |
+| `AI_PROVIDER` | `qwen` / `doubao` / `gemini` / `openai`；不填则自动选择 |
+| `DASHSCOPE_API_KEY` | 通义千问 DashScope Key |
+| `QWEN_MODEL` | 默认 `qwen-vl-plus`（视觉） |
+| `ARK_API_KEY` | 豆包 / 火山方舟 Key |
+| `DOUBAO_MODEL` | 方舟接入点 ID，如 `ep-xxxx` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini |
+| `OPENAI_API_KEY` | OpenAI |
 | `AMAP_WEB_KEY` | 高德 Web 服务 Key；缺省用演示 POI |
-| `FORCE_MOCK=1` | 强制演示数据 |
 
-未配置 Key 时应用仍可跑，进入 DEMO 模式。
+自动优先级：**通义 > 豆包 > Gemini > OpenAI**。
 
 ## 扫街榜说明
 
@@ -64,7 +69,8 @@ npm run dev
 2. 在对话里私密提供（或加入 Cursor Cloud Environment secrets）
 3. Agent 可用 `vercel --token ...` 部署 `vision-assistant/`
 
-需要写入的环境变量：
+需要写入的环境变量（按你选的模型）：
+- `DASHSCOPE_API_KEY` + `QWEN_MODEL=qwen-vl-plus`，或
+- `ARK_API_KEY` + `DOUBAO_MODEL=ep-xxxx`，或
 - `GOOGLE_GENERATIVE_AI_API_KEY`
-- `GEMINI_MODEL=gemini-3.1-flash-lite`（建议）
 - `AMAP_WEB_KEY`（必须是 Web 服务类型）

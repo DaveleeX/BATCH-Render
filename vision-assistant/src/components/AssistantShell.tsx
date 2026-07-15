@@ -49,6 +49,7 @@ export function AssistantShell() {
   const [geo, setGeo] = useState<GeoPoint | null>(null);
   const [textDraft, setTextDraft] = useState("");
   const [mode, setMode] = useState<"demo" | "live">("demo");
+  const [provider, setProvider] = useState("demo");
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [camRestart, setCamRestart] = useState(0);
 

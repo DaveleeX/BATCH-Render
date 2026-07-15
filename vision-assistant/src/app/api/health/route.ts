@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { hasLiveModel } from "@/lib/model";
+import { getActiveProvider, hasLiveModel, resolveVisionModel } from "@/lib/model";
 
 export async function GET() {
   let amap: "ok" | "plat_mismatch" | "demo" | "error" = "demo";
@@ -21,10 +21,14 @@ export async function GET() {
     }
   }
 
+  const resolved = resolveVisionModel();
+
   return NextResponse.json({
     ok: true,
     product: "览界",
     ai: hasLiveModel() ? "live" : "demo",
+    provider: getActiveProvider(),
+    model: resolved?.modelId || null,
     amap,
     note:
       amap === "plat_mismatch"
