@@ -20,11 +20,22 @@ export type PoiResult = {
   distanceMeters?: number;
   category?: string;
   location?: { lat: number; lng: number };
+  /** 楼层，如 B1 / 3F */
+  floor?: string;
   /** 当前店内/附近人数相关信息（公开扫街榜未开放时可能为估算） */
   crowdLabel?: string;
   crowdCount?: number;
   hotScore?: number;
   source: "amap" | "demo" | "scanstreet-adapter";
+};
+
+export type MallInfo = {
+  id: string;
+  name: string;
+  address?: string;
+  distanceMeters?: number;
+  location?: { lat: number; lng: number };
+  source: "amap" | "demo";
 };
 
 export type PublicProfile = {
@@ -43,6 +54,8 @@ export type ChatRequestBody = {
   text: string;
   imageDataUrl?: string;
   geo?: GeoPoint;
+  /** client-detected mall context */
+  mall?: MallInfo | null;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   sessionId?: string;
 };
@@ -73,6 +86,10 @@ export type ChatResponseBody = {
     bio?: string;
     confidence?: number;
   }>;
+  mall?: MallInfo | null;
+  brand?: string | null;
+  /** suggest placing on-screen brand pins */
+  brandTargets?: ScreenTargetDto[];
   /** client should fire /api/detect after reply */
   needTrack?: boolean;
   mode: "live" | "demo";

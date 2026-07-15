@@ -7,13 +7,12 @@ import { CameraView, captureFrame } from "@/components/CameraView";
 import { TalkButton } from "@/components/TalkButton";
 import { ChatOverlay } from "@/components/ChatOverlay";
 import { TrackOverlay, type TrackOverlayHandle } from "@/components/TrackOverlay";
-import type { ScreenTarget } from "@/lib/types";
 import {
   createPatch,
   trackBoxStep,
   type PatchStateHandle,
 } from "@/lib/tracker";
-import type { ChatMessage, GeoPoint, PoiResult } from "@/lib/types";
+import type { ChatMessage, GeoPoint, MallInfo, PoiResult, ScreenTarget } from "@/lib/types";
 
 type SpeechResultList = {
   length: number;
@@ -118,6 +117,8 @@ export function AssistantShell() {
   const [status, setStatus] = useState("按住按钮开始多轮对话");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pois, setPois] = useState<PoiResult[]>([]);
+  const [mall, setMall] = useState<MallInfo | null>(null);
+  const mallRef = useRef<MallInfo | null>(null);
   const [geo, setGeo] = useState<GeoPoint | null>(null);
   const [textDraft, setTextDraft] = useState("");
   const [mode, setMode] = useState<"demo" | "live">("demo");
@@ -131,17 +132,59 @@ export function AssistantShell() {
   const trackGenRef = useRef(0);
   const overlayRef = useRef<TrackOverlayHandle>(null);
   const patchRefreshRef = useRef(0);
+  const trackModeRef = useRef<"follow" | "guide">("follow");
 
   const wantsTrack = useCallback((q: string) => {
+    if (/在哪|在哪儿|在哪里|在几楼|在几层|怎么走|有没有/.test(q) &&
+        /(星巴克|瑞幸|优衣库|无印|喜茶|奈雪|Apple|苹果|ZARA|H&M|品牌|店)/i.test(q)) {
+      return false;
+    }
     return /这是什么|什么东西|识别|看一下|这是啥|手办|杯子|品牌|logo|这是谁|他是谁|她是谁|前面是什么|拍到|对准/.test(
       q,
     );
   }, []);
 
-  const beginTracking = useCallback((next: ScreenTarget[], focus?: string) => {
+  useEffect(() => {
+    mallRef.current = mall;
+  }, [mall]);
+
+  // GPS ready → detect nearest mall for brand guidance
+  useEffect(() => {
+    if (!geo) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/amap/mall?lat=${geo.lat}&lng=${geo.lng}&radius=250`,
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.mall) {
+          setMall(data.mall as MallInfo);
+          setStatus(
+            `已识别：${(data.mall as MallInfo).name} · 问我「星巴克在哪」`,
+          );
+        } else {
+          setMall(null);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [geo]);
+
+  const beginTracking = useCallback((
+    next: ScreenTarget[],
+    focus?: string,
+    mode: "follow" | "guide" = "follow",
+  ) => {
     const video = videoRef.current;
     const patches = new Map<string, PatchStateHandle>();
-    if (video) {
+    trackModeRef.current = mode;
+    if (mode === "follow" && video) {
       for (const t of next) {
         const patch = createPatch(video, {
           cx: t.cx,
@@ -182,6 +225,7 @@ export function AssistantShell() {
       if (gen !== trackGenRef.current) return;
       if (now - last < 100) return; // ~10fps optical is enough
       last = now;
+      if (trackModeRef.current === "guide") return; // mall brand pins stay fixed
       const video = videoRef.current;
       if (!video?.videoWidth) return;
       const current = targetsRef.current;
@@ -233,6 +277,10 @@ export function AssistantShell() {
 
     const poll = async () => {
       if (cancelled || gen !== trackGenRef.current) return;
+      if (trackModeRef.current === "guide") {
+        timer = window.setTimeout(poll, 8000);
+        return;
+      }
       if (document.hidden || busyRef.current) {
         timer = window.setTimeout(poll, 4000);
         return;
@@ -381,6 +429,7 @@ export function AssistantShell() {
           text: cleaned,
           imageDataUrl: imageDataUrl || undefined,
           geo: geo || undefined,
+          mall: mallRef.current || undefined,
           history,
         }),
       });
@@ -402,20 +451,29 @@ export function AssistantShell() {
         },
       ]);
       setPois(Array.isArray(data.pois) ? data.pois : []);
+      if (data.mall) setMall(data.mall as MallInfo);
       if (data.provider) setProvider(String(data.provider));
       setMode(data.mode === "live" ? "live" : "demo");
-      setStatus(data.mode === "live" ? "实时模式" : "演示模式");
+      setStatus(
+        data.brand
+          ? `品牌导航：${data.brand}`
+          : data.mode === "live"
+            ? "实时模式"
+            : "演示模式",
+      );
       speak(reply);
 
-      if (
-        /附近|周边|推荐/.test(cleaned) &&
-        !track
-      ) {
+      const brandTargets = Array.isArray(data.brandTargets)
+        ? (data.brandTargets as ScreenTarget[])
+        : [];
+      if (brandTargets.length) {
+        beginTracking(brandTargets, cleaned, "guide");
+      } else if (/附近|周边|推荐/.test(cleaned) && !track) {
         clearTargets();
       }
 
-      // Apply pins when ready without delaying TTS
-      if (detectPromise) {
+      // Apply vision pins when ready without delaying TTS
+      if (detectPromise && !brandTargets.length) {
         void detectPromise.then((det) => {
           const targets = Array.isArray(det?.targets)
             ? (det.targets as ScreenTarget[])
@@ -425,8 +483,7 @@ export function AssistantShell() {
             setStatus("已锁定目标");
           }
         });
-      } else if (data.needTrack && imageDataUrl) {
-        // fallback if chat says need track but parallel didn't start
+      } else if (data.needTrack && imageDataUrl && !brandTargets.length) {
         void fetch("/api/detect", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -573,7 +630,9 @@ export function AssistantShell() {
               览界
             </p>
             <p className="mt-0.5 truncate text-[11px] font-semibold text-white/85">
-              看见，并告诉你答案
+              {mall
+                ? `${mall.name}${mall.distanceMeters != null ? ` · ${mall.distanceMeters}m` : ""}`
+                : "看见，并告诉你答案"}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -602,14 +661,19 @@ export function AssistantShell() {
       {/* Middle band: always between header and bottom chrome — never under controls */}
       <div className="pointer-events-none absolute inset-x-0 top-[4.75rem] bottom-[10.75rem] z-20 px-4 sm:bottom-[11.25rem]">
         <div className="mx-auto h-full max-w-md pb-1 pt-[max(0.25rem,env(safe-area-inset-top))]">
-          <ChatOverlay messages={messages} pois={pois} status={status} />
+          <ChatOverlay
+            messages={messages}
+            pois={pois}
+            status={status}
+            mallName={mall?.name}
+          />
         </div>
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
         <div className="mx-auto max-w-md">
-          <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
-            <div className="flex gap-1.5">
+            <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+            <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 className="wise-chip wise-tap bg-[var(--canvas)]/95 px-2.5 py-1.5 text-[10px] text-[var(--ink)]"
@@ -626,6 +690,19 @@ export function AssistantShell() {
               >
                 重试
               </button>
+              {mall
+                ? ["星巴克在哪", "优衣库在几楼", "喜茶在哪"].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      disabled={busy}
+                      className="wise-chip wise-tap bg-[var(--primary)] px-2.5 py-1.5 text-[10px] text-[var(--ink)] disabled:opacity-40"
+                      onClick={() => void ask(q)}
+                    >
+                      {q.replace(/在哪|在几楼/g, "")}
+                    </button>
+                  ))
+                : null}
             </div>
             <p className="text-[10px] font-medium text-white/65">
               {geo

@@ -1,33 +1,69 @@
 import { NextResponse } from "next/server";
-import { searchNearbyPois } from "@/lib/amap";
+import {
+  brandPoisToTargets,
+  extractBrandQuery,
+  searchBrandInMall,
+  searchNearbyPois,
+} from "@/lib/amap";
 import {
   generateAssistantReply,
   getActiveProvider,
   hasLiveModel,
 } from "@/lib/model";
 import { matchPeopleInFrame } from "@/lib/people";
-import type { ChatRequestBody, ChatResponseBody, PoiResult } from "@/lib/types";
+import type {
+  ChatRequestBody,
+  ChatResponseBody,
+  PoiResult,
+  ScreenTarget,
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 function detectIntent(text: string) {
-  const t = text.toLowerCase();
+  const brand = extractBrandQuery(text);
+  const wantBrand =
+    Boolean(brand) &&
+    /在哪|在哪儿|在哪里|在几楼|在几层|在哪层|怎么走|位置|有没有|找/.test(text);
   return {
+    brand,
+    wantBrand,
     wantNearby:
-      /附近|周边|周围|推荐|找一家|有没有.*(咖啡|餐厅|娱乐|酒吧|景点)|附近.*(咖啡|店|玩)/.test(
-        t,
-      ) || /^(咖啡|咖啡馆|餐厅|娱乐)$/.test(t.trim()),
-    wantWho: /这是谁|他是谁|她是谁|人脸|这人是|认识他|认识她|身份是谁/.test(t),
+      !wantBrand &&
+      (/附近|周边|周围|推荐|找一家|有没有.*(咖啡|餐厅|娱乐|酒吧|景点)|附近.*(咖啡|店|玩)/.test(
+        text,
+      ) ||
+        /^(咖啡|咖啡馆|餐厅|娱乐)$/.test(text.trim())),
+    wantWho: /这是谁|他是谁|她是谁|人脸|这人是|认识他|认识她|身份是谁/.test(text),
     wantWhat: /这是什么|什么东西|识别|看一下|这是啥|前面是什么|路上是什么|手办|什么玩意|拍到的是/.test(
-      t,
+      text,
     ),
-    wantWhere: /这是哪里|什么地方|在哪|定位|地址/.test(t),
+    wantWhere: /这是哪里|什么地方|在哪|定位|地址/.test(text) && !wantBrand,
     wantTrack:
       /这是什么|什么东西|识别|看一下|这是啥|手办|杯子|品牌|logo|这是谁|他是谁|她是谁|前面是什么|拍到|对准/.test(
-        t,
+        text,
       ),
   };
+}
+
+function brandReply(brand: string, mallName: string | undefined, pois: PoiResult[]) {
+  if (!pois.length) {
+    return mallName
+      ? `在「${mallName}」附近还没搜到${brand}，换个品牌再问我。`
+      : `附近还没搜到${brand}。`;
+  }
+  const top = pois[0];
+  const floorBit = top.floor ? `${top.floor}` : "";
+  const dist =
+    top.distanceMeters != null ? `约 ${top.distanceMeters} 米` : "";
+  const where = [floorBit, dist].filter(Boolean).join(" · ");
+  if (mallName) {
+    return where
+      ? `${brand}在「${mallName}」${where}。`
+      : `${brand}在「${mallName}」内，已在画面标出。`;
+  }
+  return where ? `${brand}：${where}。` : `已为你标出附近的${brand}。`;
 }
 
 function demoReply(params: {
@@ -35,11 +71,20 @@ function demoReply(params: {
   pois: PoiResult[];
   people: ChatResponseBody["matchedPeople"];
   geo?: ChatRequestBody["geo"];
+  brand?: string | null;
+  mallName?: string;
 }): string {
   const intent = detectIntent(params.text);
   if (params.people?.length) {
     const p = params.people[0];
     return `${p.displayName}${p.occupation ? `，${p.occupation}` : ""}。${p.bio || "对方已公开可发现身份。"}`;
+  }
+  if ((intent.wantBrand || params.brand) && params.pois.length) {
+    return brandReply(
+      params.brand || intent.brand || "该品牌",
+      params.mallName,
+      params.pois,
+    );
   }
   if (intent.wantNearby && params.pois.length) {
     const lines = params.pois
@@ -56,7 +101,7 @@ function demoReply(params: {
   if (intent.wantWhat) {
     return "已收到画面。配置豆包/千问后可直接告诉你这是什么。";
   }
-  return "我在。你可以问：这是什么、这是谁、附近有什么热门咖啡馆。";
+  return "我在。对准商场可问「星巴克在哪」「优衣库在几楼」。";
 }
 
 export async function POST(req: Request) {
@@ -70,11 +115,26 @@ export async function POST(req: Request) {
   const usedTools: string[] = [];
   let pois: PoiResult[] = [];
   let matchedPeople: ChatResponseBody["matchedPeople"] = [];
+  let brandTargets: ScreenTarget[] = [];
+  const mallName = body.mall?.name;
 
-  // Parallelize side tools so reply path is not strictly serial
   const sideJobs: Promise<void>[] = [];
 
-  if (intent.wantNearby && body.geo) {
+  if (intent.wantBrand && intent.brand && body.geo) {
+    sideJobs.push(
+      (async () => {
+        const found = await searchBrandInMall({
+          geo: body.geo!,
+          brand: intent.brand!,
+          mall: body.mall || null,
+          limit: 5,
+        });
+        pois = found.pois;
+        brandTargets = brandPoisToTargets(found.pois);
+        usedTools.push("amap_brand_in_mall");
+      })(),
+    );
+  } else if (intent.wantNearby && body.geo) {
     sideJobs.push(
       (async () => {
         const keywordMatch = text.match(
@@ -97,7 +157,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Who-match is a second model call — only when clearly needed
   if (intent.wantWho) {
     sideJobs.push(
       (async () => {
@@ -116,22 +175,43 @@ export async function POST(req: Request) {
 
   await Promise.all(sideJobs);
 
+  const basePayload = {
+    pois,
+    matchedPeople,
+    mall: body.mall || null,
+    brand: intent.brand,
+    brandTargets: brandTargets.length ? brandTargets : undefined,
+    needTrack: Boolean(
+      !intent.wantBrand &&
+        (intent.wantTrack || intent.wantWhat || intent.wantWho),
+    ),
+    usedTools: Array.from(new Set(usedTools)),
+    provider: getActiveProvider(),
+  };
+
+  // Brand questions: prefer fast factual reply without waiting on vision LLM
+  if (intent.wantBrand && intent.brand) {
+    const reply = brandReply(intent.brand, mallName, pois);
+    return NextResponse.json({
+      reply,
+      ...basePayload,
+      mode: pois[0]?.source === "demo" ? "demo" : "live",
+    } satisfies ChatResponseBody);
+  }
+
   if (!hasLiveModel()) {
     const reply = demoReply({
       text,
       pois,
       people: matchedPeople,
       geo: body.geo,
+      brand: intent.brand,
+      mallName,
     });
     return NextResponse.json({
       reply,
-      pois,
-      matchedPeople,
-      // client handles tracking via /api/detect in parallel
-      needTrack: Boolean(intent.wantTrack || intent.wantWhat || intent.wantWho),
+      ...basePayload,
       mode: "demo",
-      usedTools,
-      provider: getActiveProvider(),
     } satisfies ChatResponseBody);
   }
 
@@ -141,7 +221,7 @@ export async function POST(req: Request) {
         .slice(0, 3)
         .map(
           (p) =>
-            `${p.name}${p.distanceMeters != null ? ` ${p.distanceMeters}米` : ""}${p.crowdLabel ? ` ${p.crowdLabel}` : ""}`,
+            `${p.name}${p.floor ? ` ${p.floor}` : ""}${p.distanceMeters != null ? ` ${p.distanceMeters}米` : ""}`,
         )
         .join("；")
     : "无";
@@ -160,9 +240,11 @@ export async function POST(req: Request) {
   const system = isVisionId
     ? `你是「览界」视觉助手。根据画面快速识别。
 规则：读清文字/logo 再下结论；看不清就直说；只回 1 句中文，不超过 40 字。
-地理：${body.geo ? `${body.geo.lat.toFixed(5)}, ${body.geo.lng.toFixed(5)}` : "未知"}`
+地理：${body.geo ? `${body.geo.lat.toFixed(5)}, ${body.geo.lng.toFixed(5)}` : "未知"}
+商场：${mallName || "未知"}`
     : `你是「览界」眼镜助手。短、准、中文 1 句，最多 40 字。禁止复读用户。
 地理：${body.geo ? `${body.geo.lat.toFixed(5)}, ${body.geo.lng.toFixed(5)}` : "未知"}
+商场：${mallName || "未知"}
 附近：${poiHint}
 人物：${peopleHint}`;
 
@@ -186,17 +268,15 @@ export async function POST(req: Request) {
         pois,
         people: matchedPeople,
         geo: body.geo,
+        brand: intent.brand,
+        mallName,
       });
     }
 
     return NextResponse.json({
       reply,
-      pois,
-      matchedPeople,
-      needTrack: Boolean(intent.wantTrack || intent.wantWhat || intent.wantWho),
+      ...basePayload,
       mode: "live",
-      usedTools: Array.from(new Set(usedTools)),
-      provider: getActiveProvider(),
     } satisfies ChatResponseBody);
   } catch (err) {
     const message = err instanceof Error ? err.message : "model_error";
@@ -206,13 +286,11 @@ export async function POST(req: Request) {
         pois,
         people: matchedPeople,
         geo: body.geo,
+        brand: intent.brand,
+        mallName,
       }),
-      pois,
-      matchedPeople,
-      needTrack: Boolean(intent.wantTrack || intent.wantWhat || intent.wantWho),
+      ...basePayload,
       mode: "demo",
-      usedTools,
-      provider: getActiveProvider(),
       error: message,
     } satisfies ChatResponseBody & { error?: string });
   }

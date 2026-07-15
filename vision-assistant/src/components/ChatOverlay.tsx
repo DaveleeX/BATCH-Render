@@ -6,10 +6,14 @@ type Props = {
   messages: ChatMessage[];
   pois: PoiResult[];
   status: string;
+  mallName?: string;
 };
 
-export function ChatOverlay({ messages, pois, status }: Props) {
+export function ChatOverlay({ messages, pois, status, mallName }: Props) {
   const latest = messages.slice(-4);
+  const lookingBrand = pois.some(
+    (p) => p.floor || p.category === "商场品牌" || /（.*）/.test(p.name),
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-end gap-2">
@@ -38,7 +42,11 @@ export function ChatOverlay({ messages, pois, status }: Props) {
           <div className="pointer-events-auto wise-card shrink-0 overflow-hidden shadow-[0_8px_24px_rgba(14,15,12,0.2)]">
             <div className="border-b border-[var(--canvas-soft)] bg-[var(--primary-pale)] px-4 py-2">
               <p className="text-[12px] font-semibold text-[var(--ink-deep)]">
-                附近推荐
+                {lookingBrand
+                  ? mallName
+                    ? `${mallName} · 品牌位置`
+                    : "品牌位置"
+                  : "附近推荐"}
               </p>
             </div>
             {pois.slice(0, 3).map((p, i) => (
@@ -60,12 +68,15 @@ export function ChatOverlay({ messages, pois, status }: Props) {
                   <span className="text-[14px] font-semibold text-[var(--ink)]">
                     {p.name}
                   </span>
-                  <span className="shrink-0 text-[12px] font-medium text-[var(--mute)]">
-                    {p.distanceMeters != null ? `${p.distanceMeters}m` : ""}
+                  <span className="shrink-0 text-[12px] font-semibold text-[var(--ink-deep)]">
+                    {p.floor ||
+                      (p.distanceMeters != null ? `${p.distanceMeters}m` : "")}
                   </span>
                 </div>
                 <p className="mt-0.5 text-[12px] text-[var(--body)]">
-                  {p.crowdLabel || p.address || p.category}
+                  {[p.floor && !p.address?.includes(p.floor) ? p.floor : null, p.crowdLabel || p.address || p.category]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               </a>
             ))}
