@@ -93,3 +93,22 @@ button,
 input {
   font: inherit;
 }
+
+@keyframes track-pulse-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+.track-pulse > span:last-child {
+  animation: track-pulse-ring 1.4s ease-out infinite;
+}

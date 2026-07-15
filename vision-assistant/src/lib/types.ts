@@ -47,6 +47,22 @@ export type ChatRequestBody = {
   sessionId?: string;
 };
 
+export type ScreenTarget = {
+  id: string;
+  label: string;
+  /** normalized center X in [0,1], image top-left origin */
+  cx: number;
+  /** normalized center Y in [0,1] */
+  cy: number;
+  /** normalized width */
+  w: number;
+  /** normalized height */
+  h: number;
+  confidence?: number;
+};
+
+export type ScreenTargetDto = ScreenTarget;
+
 export type ChatResponseBody = {
   reply: string;
   pois?: PoiResult[];
@@ -57,6 +73,8 @@ export type ChatResponseBody = {
     bio?: string;
     confidence?: number;
   }>;
+  /** screen-space pins for recognized objects */
+  targets?: ScreenTargetDto[];
   mode: "live" | "demo";
   usedTools?: string[];
   provider?: string;

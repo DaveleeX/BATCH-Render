@@ -6,6 +6,13 @@ import { nanoid } from "nanoid";
 import { CameraView, captureFrame } from "@/components/CameraView";
 import { TalkButton } from "@/components/TalkButton";
 import { ChatOverlay } from "@/components/ChatOverlay";
+import { TrackOverlay } from "@/components/TrackOverlay";
+import type { ScreenTarget } from "@/lib/types";
+import {
+  createPatch,
+  trackBoxStep,
+  type PatchStateHandle,
+} from "@/lib/tracker";
 import type { ChatMessage, GeoPoint, PoiResult } from "@/lib/types";
 
 type SpeechResultList = {
@@ -117,6 +124,165 @@ export function AssistantShell() {
   const [provider, setProvider] = useState("demo");
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [camRestart, setCamRestart] = useState(0);
+  const [targets, setTargets] = useState<ScreenTarget[]>([]);
+  const [trackSession, setTrackSession] = useState(0);
+  const targetsRef = useRef<ScreenTarget[]>([]);
+  const patchesRef = useRef<Map<string, PatchStateHandle>>(new Map());
+  const trackFocusRef = useRef<string>("");
+  const trackGenRef = useRef(0);
+
+  useEffect(() => {
+    targetsRef.current = targets;
+  }, [targets]);
+
+  const seedTargets = useCallback((next: ScreenTarget[]) => {
+    const video = videoRef.current;
+    const patches = new Map<string, PatchStateHandle>();
+    if (video) {
+      for (const t of next) {
+        const patch = createPatch(video, {
+          cx: t.cx,
+          cy: t.cy,
+          w: t.w,
+          h: t.h,
+        });
+        if (patch) patches.set(t.id, patch);
+      }
+    }
+    patchesRef.current = patches;
+    setTargets(next);
+  }, []);
+
+  const beginTracking = useCallback(
+    (next: ScreenTarget[], focus?: string) => {
+      if (focus) trackFocusRef.current = focus;
+      trackGenRef.current += 1;
+      setTrackSession((n) => n + 1);
+      seedTargets(next);
+    },
+    [seedTargets],
+  );
+
+  const clearTargets = useCallback(() => {
+    patchesRef.current = new Map();
+    trackFocusRef.current = "";
+    trackGenRef.current += 1;
+    setTrackSession((n) => n + 1);
+    setTargets([]);
+  }, []);
+
+  // Optical follow between vision polls
+  useEffect(() => {
+    if (!targets.length) return;
+    let raf = 0;
+    let last = 0;
+
+    const tick = (now: number) => {
+      raf = window.requestAnimationFrame(tick);
+      if (now - last < 70) return;
+      last = now;
+      const video = videoRef.current;
+      if (!video || !video.videoWidth) return;
+
+      const current = targetsRef.current;
+      if (!current.length) return;
+
+      let changed = false;
+      const next = current.map((t) => {
+        const prevPatch = patchesRef.current.get(t.id) || null;
+        const hit = trackBoxStep(
+          video,
+          { cx: t.cx, cy: t.cy, w: t.w, h: t.h },
+          prevPatch,
+          144,
+        );
+        if (!hit) return t;
+        // Lost lock: keep last position
+        if (hit.score > 55) return t;
+        patchesRef.current.set(t.id, hit.patch);
+        const dx = Math.abs(hit.box.cx - t.cx);
+        const dy = Math.abs(hit.box.cy - t.cy);
+        if (dx < 0.002 && dy < 0.002) return t;
+        changed = true;
+        // Lerp for smoother AR feel
+        return {
+          ...t,
+          cx: t.cx * 0.35 + hit.box.cx * 0.65,
+          cy: t.cy * 0.35 + hit.box.cy * 0.65,
+        };
+      });
+
+      if (changed) {
+        targetsRef.current = next;
+        setTargets(next);
+      }
+    };
+
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, [targets.length]);
+
+  // Periodic vision re-localize so pins stay on the real object
+  useEffect(() => {
+    if (!targets.length) return;
+    const gen = trackGenRef.current;
+    let cancelled = false;
+    let timer = 0;
+
+    const poll = async () => {
+      if (cancelled || gen !== trackGenRef.current) return;
+      const video = videoRef.current;
+      if (!video?.videoWidth || busyRef.current) {
+        timer = window.setTimeout(poll, 1600);
+        return;
+      }
+      const imageDataUrl = captureFrame(video, 900, 0.78);
+      if (!imageDataUrl) {
+        timer = window.setTimeout(poll, 1600);
+        return;
+      }
+      try {
+        const res = await fetch("/api/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageDataUrl,
+            focus: trackFocusRef.current || undefined,
+            hints: targetsRef.current.map((t) => t.label),
+          }),
+        });
+        const data = await res.json();
+        if (cancelled || gen !== trackGenRef.current) return;
+        const fresh = Array.isArray(data.targets)
+          ? (data.targets as ScreenTarget[])
+          : [];
+        if (!fresh.length) {
+          timer = window.setTimeout(poll, 2200);
+          return;
+        }
+
+        const prev = targetsRef.current;
+        const merged: ScreenTarget[] = fresh.map((f, i) => {
+          const byLabel = prev.find((p) => p.label === f.label);
+          const byIndex = prev[i];
+          const id = byLabel?.id || byIndex?.id || f.id || nanoid(8);
+          return { ...f, id };
+        });
+        seedTargets(merged);
+      } catch {
+        /* keep optical track */
+      }
+      if (!cancelled && gen === trackGenRef.current) {
+        timer = window.setTimeout(poll, 1800);
+      }
+    };
+
+    timer = window.setTimeout(poll, 1400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [trackSession, seedTargets]);
 
   useEffect(() => {
     historyRef.current = messages
@@ -211,7 +377,21 @@ export function AssistantShell() {
       setPois(Array.isArray(data.pois) ? data.pois : []);
       if (data.provider) setProvider(String(data.provider));
       setMode(data.mode === "live" ? "live" : "demo");
-      setStatus(data.mode === "live" ? "实时模式" : "演示模式");
+      setStatus(
+        Array.isArray(data.targets) && data.targets.length
+          ? "已锁定目标 · 定位中"
+          : data.mode === "live"
+            ? "实时模式"
+            : "演示模式",
+      );
+      if (Array.isArray(data.targets) && data.targets.length) {
+        beginTracking(data.targets as ScreenTarget[], cleaned);
+      } else if (
+        /附近|周边|推荐/.test(cleaned) &&
+        !/这是什么|手办|识别|看一眼|这是谁/.test(cleaned)
+      ) {
+        clearTargets();
+      }
       speak(reply);
     } catch {
       setStatus("网络异常，请重试");
@@ -219,7 +399,7 @@ export function AssistantShell() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [geo]);
+  }, [geo, beginTracking, clearTargets]);
 
   const onHoldStart = useCallback(() => {
     if (busyRef.current) return;
@@ -336,6 +516,8 @@ export function AssistantShell() {
         restartSignal={camRestart}
       />
 
+      <TrackOverlay targets={targets} mirrored={facing === "user"} />
+
       <header className="absolute inset-x-0 top-0 z-40 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3">
           <div className="min-w-0">
@@ -347,6 +529,15 @@ export function AssistantShell() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {targets.length ? (
+              <button
+                type="button"
+                onClick={clearTargets}
+                className="nike-pill nike-tap bg-white/90 px-2.5 py-1 text-[10px] font-medium text-[#111111]"
+              >
+                清除定位
+              </button>
+            ) : null}
             <span className="nike-pill bg-white px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-[#111111]">
               {mode === "live" ? provider : "demo"}
             </span>

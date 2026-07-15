@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { searchNearbyPois } from "@/lib/amap";
 import {
+  demoTargetsForFocus,
+  detectScreenTargets,
+} from "@/lib/detect";
+import {
   generateAssistantReply,
   getActiveProvider,
   hasLiveModel,
 } from "@/lib/model";
 import { matchPeopleInFrame } from "@/lib/people";
-import type { ChatRequestBody, ChatResponseBody, PoiResult } from "@/lib/types";
+import type {
+  ChatRequestBody,
+  ChatResponseBody,
+  PoiResult,
+  ScreenTarget,
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -19,11 +28,36 @@ function detectIntent(text: string) {
         t,
       ) || /^(咖啡|咖啡馆|餐厅|娱乐)$/.test(t.trim()),
     wantWho: /这是谁|他是谁|她是谁|人脸|这人是|认识他|认识她|身份是谁/.test(t),
-    wantWhat: /这是什么|什么东西|识别|看一下|这是啥|前面是什么|路上是什么/.test(
+    wantWhat: /这是什么|什么东西|识别|看一下|这是啥|前面是什么|路上是什么|手办|什么玩意|拍到的是/.test(
       t,
     ),
     wantWhere: /这是哪里|什么地方|在哪|定位|地址/.test(t),
+    wantTrack:
+      /这是什么|什么东西|识别|看一下|这是啥|手办|杯子|品牌|logo|这是谁|他是谁|她是谁|前面是什么|拍到|对准/.test(
+        t,
+      ),
   };
+}
+
+async function resolveTargets(params: {
+  imageDataUrl?: string;
+  text: string;
+  shouldTrack: boolean;
+}): Promise<ScreenTarget[]> {
+  if (!params.shouldTrack || !params.imageDataUrl?.startsWith("data:image")) {
+    return [];
+  }
+  if (!hasLiveModel()) {
+    return demoTargetsForFocus(params.text);
+  }
+  try {
+    return await detectScreenTargets({
+      imageDataUrl: params.imageDataUrl,
+      focus: params.text,
+    });
+  } catch {
+    return demoTargetsForFocus(params.text);
+  }
 }
 
 function demoReply(params: {
@@ -98,7 +132,17 @@ export async function POST(req: Request) {
     }
   }
 
+  const shouldTrack = Boolean(
+    intent.wantTrack || intent.wantWhat || intent.wantWho,
+  );
+
   if (!hasLiveModel()) {
+    const targets = await resolveTargets({
+      imageDataUrl: body.imageDataUrl,
+      text,
+      shouldTrack,
+    });
+    if (targets.length) usedTools.push("screen_track");
     const reply = demoReply({
       text,
       pois,
@@ -109,6 +153,7 @@ export async function POST(req: Request) {
       reply,
       pois,
       matchedPeople,
+      targets,
       mode: "demo",
       usedTools,
       provider: getActiveProvider(),
@@ -163,6 +208,12 @@ export async function POST(req: Request) {
     : text;
 
   try {
+    const targetsPromise = resolveTargets({
+      imageDataUrl: body.imageDataUrl,
+      text,
+      shouldTrack,
+    });
+
     let reply = await generateAssistantReply({
       system,
       text: prompt,
@@ -181,16 +232,25 @@ export async function POST(req: Request) {
       });
     }
 
+    const targets = await targetsPromise;
+    if (targets.length) usedTools.push("screen_track");
+
     return NextResponse.json({
       reply,
       pois,
       matchedPeople,
+      targets,
       mode: "live",
       usedTools: Array.from(new Set(usedTools)),
       provider: getActiveProvider(),
     } satisfies ChatResponseBody);
   } catch (err) {
     const message = err instanceof Error ? err.message : "model_error";
+    const targets = await resolveTargets({
+      imageDataUrl: body.imageDataUrl,
+      text,
+      shouldTrack,
+    }).catch(() => [] as ScreenTarget[]);
     return NextResponse.json({
       reply: demoReply({
         text,
@@ -200,6 +260,7 @@ export async function POST(req: Request) {
       }),
       pois,
       matchedPeople,
+      targets,
       mode: "demo",
       usedTools,
       provider: getActiveProvider(),
