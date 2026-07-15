@@ -15,7 +15,10 @@ import {
   trackBoxStep,
   type PatchStateHandle,
 } from "@/lib/tracker";
-import { requestAllPermissions } from "@/lib/permissions";
+import {
+  requestBasicPermissions,
+  requestCameraPermission,
+} from "@/lib/permissions";
 import type { ChatMessage, GeoPoint, MallInfo, PoiResult, ScreenTarget } from "@/lib/types";
 
 type SpeechResultList = {
@@ -108,6 +111,45 @@ function speak(text: string) {
   window.speechSynthesis.speak(u);
 }
 
+function IconVideoCam({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="2.5"
+        y="6"
+        width="13"
+        height="12"
+        rx="2.5"
+        stroke="currentColor"
+        strokeWidth="2.2"
+      />
+      <path
+        d="M15.5 10.2 21 7.5v9l-5.5-2.7"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7.2 12.2 11 14.4V10l-3.8 2.2Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function IconClose({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M7 7l10 10M17 7 7 17"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function AssistantShell() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -127,11 +169,12 @@ export function AssistantShell() {
   const [textDraft, setTextDraft] = useState("");
   const [mode, setMode] = useState<"demo" | "live">("demo");
   const [provider, setProvider] = useState("demo");
-  const [facing, setFacing] = useState<"user" | "environment">("environment");
+  const [facing] = useState<"user" | "environment">("environment");
   const [camRestart, setCamRestart] = useState(0);
-  const [camBoot, setCamBoot] = useState(0);
   const [permReady, setPermReady] = useState(false);
   const [permBusy, setPermBusy] = useState(false);
+  const [cameraMode, setCameraMode] = useState(false);
+  const [camBusy, setCamBusy] = useState(false);
   const [actionMode, setActionMode] = useState<ActionMode>("voice");
   const [trackingActive, setTrackingActive] = useState(false);
   const targetsRef = useRef<ScreenTarget[]>([]);
@@ -374,29 +417,54 @@ export function AssistantShell() {
   const bootstrapPermissions = useCallback(async () => {
     if (permBusy || permReady) return;
     setPermBusy(true);
-    setStatus("正在申请相机 / 麦克风 / 定位…");
+    setStatus("正在申请麦克风与定位…");
     try {
-      const snap = await requestAllPermissions();
+      const snap = await requestBasicPermissions();
       if (snap.geo) setGeo(snap.geo);
       else if (!snap.geolocation) {
         setStatus("定位未授权，附近商场会受影响");
       }
-      if (!snap.camera) {
-        setStatus("相机未授权，请在浏览器设置中允许");
-      } else if (!snap.microphone) {
+      if (!snap.microphone) {
         setStatus("麦克风未授权，可改用文字模式");
       } else {
-        setStatus("按住说话 · 右侧切换文字");
+        setStatus("对话模式 · 右上角可开摄像头");
       }
       setPermReady(true);
-      setCamBoot((n) => n + 1);
     } finally {
       setPermBusy(false);
     }
   }, [permBusy, permReady]);
 
+  const openCameraMode = useCallback(async () => {
+    if (camBusy || cameraMode) return;
+    setCamBusy(true);
+    setStatus("正在开启摄像头…");
+    try {
+      const ok = await requestCameraPermission();
+      if (!ok) {
+        setStatus("相机未授权，请在浏览器设置中允许");
+        return;
+      }
+      setCameraMode(true);
+      setStatus("摄像头对话 · 按住说话或输入文字");
+    } finally {
+      setCamBusy(false);
+    }
+  }, [camBusy, cameraMode]);
+
+  const closeCameraMode = useCallback(() => {
+    setCameraMode(false);
+    clearTargets();
+    videoRef.current = null;
+    setStatus("对话模式 · 右上角可开摄像头");
+  }, [clearTargets]);
+
   const onReady = useCallback((video: HTMLVideoElement) => {
     videoRef.current = video;
+  }, []);
+
+  const onCameraStopped = useCallback(() => {
+    videoRef.current = null;
   }, []);
 
   const ask = useCallback(async (text: string) => {
@@ -633,10 +701,11 @@ export function AssistantShell() {
     <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[var(--ink)] text-white">
       <CameraView
         facingMode={facing}
+        active={cameraMode}
         onReady={onReady}
+        onStopped={onCameraStopped}
         restartSignal={camRestart}
-        bootSignal={camBoot}
-        suppressGate={!permReady}
+        suppressGate
       />
 
       <TrackOverlay ref={overlayRef} mirrored={facing === "user"} />
@@ -647,12 +716,12 @@ export function AssistantShell() {
             览界
           </p>
           <p className="mx-auto mt-4 max-w-xs text-[15px] font-medium leading-snug text-white/90">
-            开始前将一次性申请相机、麦克风与定位权限
+            先进入对话模式；需要看画面时再点右上角视频按钮
           </p>
           <ul className="mt-5 space-y-1.5 text-left text-[13px] font-medium text-white/75">
-            <li>· 相机：看你眼前的画面</li>
             <li>· 麦克风：按住说话提问</li>
             <li>· 定位：找附近商场与品牌</li>
+            <li>· 相机：右上角开启摄像头对话</li>
           </ul>
           <button
             type="button"
@@ -660,7 +729,7 @@ export function AssistantShell() {
             onClick={() => void bootstrapPermissions()}
             className="wise-btn wise-btn-primary wise-tap mt-8 px-10 py-3.5 text-[15px] disabled:opacity-60"
           >
-            {permBusy ? "授权中…" : "开始并授权全部权限"}
+            {permBusy ? "授权中…" : "开始对话"}
           </button>
         </div>
       ) : null}
@@ -672,13 +741,17 @@ export function AssistantShell() {
               览界
             </p>
             <p className="mt-0.5 truncate text-[11px] font-semibold text-white/85">
-              {mall
-                ? `${mall.name}${mall.distanceMeters != null ? ` · ${mall.distanceMeters}m` : ""}`
-                : "看见，并告诉你答案"}
+              {cameraMode
+                ? mall
+                  ? `${mall.name}${mall.distanceMeters != null ? ` · ${mall.distanceMeters}m` : ""}`
+                  : "摄像头对话"
+                : mall
+                  ? `${mall.name}${mall.distanceMeters != null ? ` · ${mall.distanceMeters}m` : ""}`
+                  : "对话模式"}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {trackingActive ? (
+            {trackingActive && cameraMode ? (
               <button
                 type="button"
                 onClick={clearTargets}
@@ -687,15 +760,32 @@ export function AssistantShell() {
                 清除定位
               </button>
             ) : null}
-            <span className="wise-chip bg-[var(--primary-pale)] px-2.5 py-1.5 text-[10px] text-[var(--ink-deep)]">
-              {mode === "live" ? provider : "demo"}
-            </span>
             <Link
               href="/profile"
-              className="wise-btn wise-btn-primary wise-tap px-3.5 py-2 text-[12px]"
+              className="wise-chip wise-tap bg-white/15 px-2.5 py-1.5 text-[10px] text-white"
             >
-              我的身份
+              身份
             </Link>
+            {cameraMode ? (
+              <button
+                type="button"
+                aria-label="关闭摄像头对话"
+                onClick={closeCameraMode}
+                className="wise-tap flex size-11 items-center justify-center rounded-full border-2 border-[var(--primary)] bg-[var(--ink)] text-[var(--primary)] shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+              >
+                <IconClose className="size-5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-label="开启摄像头对话"
+                disabled={!permReady || camBusy}
+                onClick={() => void openCameraMode()}
+                className="wise-tap flex size-11 items-center justify-center rounded-full bg-[var(--primary)] text-[var(--ink)] shadow-[0_4px_16px_rgba(159,232,112,0.35)] disabled:opacity-40"
+              >
+                <IconVideoCam className="size-5" />
+              </button>
+            )}
           </div>
         </div>
       </header>

@@ -47,7 +47,7 @@ export function ChatOverlay({ messages, pois, status, mallName }: Props) {
         <div className="flex min-h-full flex-col justify-end gap-2 pb-1">
           {messages.length === 0 ? (
             <p className="pointer-events-none px-2 text-center text-[12px] font-medium text-white/50">
-              对话会出现在这里 · 可上滑查看上下文
+              对话会出现在这里 · 可上下滑动查看上下文
             </p>
           ) : null}
 

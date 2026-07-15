@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type Props = {
   onReady?: (video: HTMLVideoElement) => void;
+  onStopped?: () => void;
   facingMode?: "user" | "environment";
+  /** When false, camera stays off and stream is released */
+  active?: boolean;
   /** 外部强制重启（切换镜头/手动重试） */
   restartSignal?: number;
-  /** parent increments after permission grant to auto-open camera */
-  bootSignal?: number;
-  /** hide the in-view enable gate when parent shows a global permission sheet */
+  /** hide the in-view enable gate when parent controls camera from chrome */
   suppressGate?: boolean;
 };
 
@@ -32,17 +33,20 @@ async function waitForVideoFrame(video: HTMLVideoElement, timeoutMs = 2500) {
 
 export function CameraView({
   onReady,
+  onStopped,
   facingMode = "environment",
+  active = false,
   restartSignal = 0,
-  bootSignal = 0,
   suppressGate = false,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const facingRef = useRef(facingMode);
   const onReadyRef = useRef(onReady);
+  const onStoppedRef = useRef(onStopped);
   const startGenRef = useRef(0);
   const bootFacingRef = useRef(true);
+  const activeRef = useRef(active);
 
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<CamStatus>("idle");
@@ -50,6 +54,8 @@ export function CameraView({
 
   facingRef.current = facingMode;
   onReadyRef.current = onReady;
+  onStoppedRef.current = onStopped;
+  activeRef.current = active;
 
   const clearStream = useCallback((stopTracks: boolean) => {
     const stream = streamRef.current;
@@ -237,22 +243,31 @@ export function CameraView({
     }
   }, [bindStreamToVideo, clearStream]);
 
-  // 外部切换镜头 / 手动重试
+  // 外部切换镜头 / 手动重试（仅在 active 时）
   useEffect(() => {
     if (bootFacingRef.current) {
       bootFacingRef.current = false;
       return;
     }
+    if (!activeRef.current) return;
     void startCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode, restartSignal]);
 
-  // Parent finished permission gate → open camera
+  // Parent toggles camera dialogue mode
   useEffect(() => {
-    if (!bootSignal) return;
-    void startCamera();
+    if (active) {
+      void startCamera();
+      return;
+    }
+    startGenRef.current += 1;
+    clearStream(true);
+    setStatus("idle");
+    setDebug("已关闭");
+    setError(null);
+    onStoppedRef.current?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootSignal]);
+  }, [active]);
 
   useEffect(() => {
     return () => {
@@ -263,6 +278,7 @@ export function CameraView({
 
   // live 后持续巡检，防止静默黑屏
   useEffect(() => {
+    if (!active) return;
     if (status !== "live" && status !== "no_frames") return;
     const id = window.setInterval(() => {
       const video = videoRef.current;
@@ -282,18 +298,34 @@ export function CameraView({
       }
     }, 1500);
     return () => window.clearInterval(id);
-  }, [status]);
+  }, [status, active]);
 
-  const showGate = status === "idle" || status === "starting" || status === "no_frames";
+  const showGate =
+    active && (status === "idle" || status === "starting" || status === "no_frames");
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-black">
+    <div
+      className={[
+        "absolute inset-0 overflow-hidden",
+        active ? "bg-black" : "bg-[var(--ink)]",
+      ].join(" ")}
+    >
+      {!active ? (
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_0%,rgba(159,232,112,0.14),transparent_48%),linear-gradient(180deg,#1a1c18_0%,var(--ink)_55%,#0a0b09_100%)]"
+        />
+      ) : null}
+
       <video
         ref={videoRef}
         muted
         playsInline
         autoPlay
-        className="absolute inset-0 z-0 h-full w-full object-cover"
+        className={[
+          "absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-300",
+          active && status === "live" ? "opacity-100" : "opacity-0",
+        ].join(" ")}
         style={{
           width: "100%",
           height: "100%",
@@ -304,10 +336,12 @@ export function CameraView({
       />
 
       {/* Soft ink vignette for Readable Wise chrome on camera */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(14,15,12,0.55)_0%,transparent_30%,transparent_58%,rgba(14,15,12,0.78)_100%)]"
-      />
+      {active ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(14,15,12,0.55)_0%,transparent_30%,transparent_58%,rgba(14,15,12,0.78)_100%)]"
+        />
+      ) : null}
 
       {showGate && !suppressGate ? (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center">
@@ -342,7 +376,7 @@ export function CameraView({
         </div>
       ) : null}
 
-      {status === "live" ? (
+      {active && status === "live" ? (
         <p className="pointer-events-none absolute right-4 top-[max(4.25rem,env(safe-area-inset-top))] z-[5] wise-chip bg-[var(--ink)]/70 px-2.5 py-1 text-[9px] text-[var(--primary)]">
           {debug}
         </p>
