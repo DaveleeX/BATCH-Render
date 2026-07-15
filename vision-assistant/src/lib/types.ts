@@ -59,4 +59,5 @@ export type ChatResponseBody = {
   }>;
   mode: "live" | "demo";
   usedTools?: string[];
+  provider?: string;
 };

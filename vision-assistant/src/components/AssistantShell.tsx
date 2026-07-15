@@ -1,20 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { CameraView, captureFrame } from "@/components/CameraView";
 import { TalkButton } from "@/components/TalkButton";
 import { ChatOverlay } from "@/components/ChatOverlay";
 import type { ChatMessage, GeoPoint, PoiResult } from "@/lib/types";
 
+type SpeechResultList = {
+  length: number;
+  [index: number]: { isFinal: boolean; 0: { transcript: string } };
+};
+
 type SpeechRecognitionLike = {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
+  maxAlternatives?: number;
   start: () => void;
   stop: () => void;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  abort?: () => void;
+  onresult: ((event: { resultIndex: number; results: SpeechResultList }) => void) | null;
   onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
 };
@@ -28,19 +35,77 @@ function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
+/** 去掉「这是什么这是什么」这类叠句 */
+export function collapseRepeatedSpeech(input: string): string {
+  let t = input.replace(/\s+/g, " ").trim();
+  if (!t) return t;
+
+  // 连续相同短句折叠
+  for (let n = 0; n < 4; n++) {
+    const m = t.match(/^(.{2,40}?)\1+$/u);
+    if (m) {
+      t = m[1];
+      continue;
+    }
+    break;
+  }
+
+  // 按标点切段，去掉连续重复段
+  const parts = t
+    .split(/([，。！？；、,.!?]+)/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  for (const part of parts) {
+    if (/^[，。！？；、,.!?]+$/.test(part)) {
+      if (out.length) out.push(part);
+      continue;
+    }
+    if (out.length && out[out.length - 1] === part) continue;
+    // 去掉「你好你好」这类段内重复
+    const inner = part.match(/^(.{2,20}?)\1+$/u);
+    out.push(inner ? inner[1] : part);
+  }
+  t = out.join("").replace(/\s+/g, " ").trim();
+
+  // 对半分检测（整段翻倍粘贴）
+  for (let round = 0; round < 3; round++) {
+    const mid = Math.floor(t.length / 2);
+    if (mid < 2) break;
+    if (t.slice(0, mid) === t.slice(mid, mid * 2)) {
+      t = t.slice(0, mid).trim();
+      continue;
+    }
+    break;
+  }
+  return t;
+}
+
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
+  // 不朗读括号注释 / markdown，减少“又念同一段”
+  const clean = text
+    .replace(/（[^）]*）/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/[*_`#>-]/g, "")
+    .replace(/\n+/g, "，")
+    .trim();
+  if (!clean) return;
+  const u = new SpeechSynthesisUtterance(clean);
   u.lang = "zh-CN";
-  u.rate = 1.05;
+  u.rate = 1.08;
   window.speechSynthesis.speak(u);
 }
 
 export function AssistantShell() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const finalTranscriptRef = useRef("");
   const transcriptRef = useRef("");
+  const endingRef = useRef(false);
+  const busyRef = useRef(false);
+  const historyRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [listening, setListening] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("按住按钮开始多轮对话");
@@ -52,6 +117,15 @@ export function AssistantShell() {
   const [provider, setProvider] = useState("demo");
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [camRestart, setCamRestart] = useState(0);
+
+  useEffect(() => {
+    historyRef.current = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+  }, [messages]);
 
   useEffect(() => {
     fetch("/api/health")
@@ -83,93 +157,144 @@ export function AssistantShell() {
     videoRef.current = video;
   }, []);
 
-  const history = useMemo(
-    () =>
-      messages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-    [messages],
-  );
+  const ask = useCallback(async (text: string) => {
+    const cleaned = collapseRepeatedSpeech(text);
+    if (!cleaned || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setStatus("思考中…");
 
-  const ask = useCallback(
-    async (text: string) => {
-      const cleaned = text.trim();
-      if (!cleaned || busy) return;
-      setBusy(true);
-      setStatus("思考中…");
-      const userMsg: ChatMessage = {
-        id: nanoid(),
-        role: "user",
-        content: cleaned,
-        createdAt: Date.now(),
-      };
-      setMessages((prev) => [...prev, userMsg]);
+    const userMsg: ChatMessage = {
+      id: nanoid(),
+      role: "user",
+      content: cleaned,
+      createdAt: Date.now(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
 
-      const imageDataUrl = videoRef.current
-        ? captureFrame(videoRef.current)
-        : undefined;
+    const imageDataUrl = videoRef.current
+      ? captureFrame(videoRef.current)
+      : undefined;
 
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: cleaned,
-            imageDataUrl: imageDataUrl || undefined,
-            geo: geo || undefined,
-            history,
-          }),
-        });
-        const data = await res.json();
-        const reply = String(data.reply || "我没听清，再说一次？");
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: nanoid(),
-            role: "assistant",
-            content: reply,
-            createdAt: Date.now(),
-          },
-        ]);
-        setPois(Array.isArray(data.pois) ? data.pois : []);
-        setMode(data.mode === "live" ? "live" : "demo");
-        setStatus(data.mode === "live" ? "实时模式" : "演示模式");
-        speak(reply);
-      } catch {
-        setStatus("网络异常，请重试");
-      } finally {
-        setBusy(false);
+    // 只用当前轮之前的历史，避免把本轮用户句再塞一遍
+    const history = historyRef.current.slice(-6);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: cleaned,
+          imageDataUrl: imageDataUrl || undefined,
+          geo: geo || undefined,
+          history,
+        }),
+      });
+      const data = await res.json();
+      let reply = String(data.reply || "我没听清，再说一次？");
+      // 若模型几乎原样复读用户，截断提示
+      if (
+        reply.replace(/\s/g, "").includes(cleaned.replace(/\s/g, "")) &&
+        reply.length < cleaned.length + 8
+      ) {
+        reply = "我听到了。你是想让我看画面、认人，还是查附近？";
       }
-    },
-    [busy, geo, history],
-  );
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nanoid(),
+          role: "assistant",
+          content: reply,
+          createdAt: Date.now(),
+        },
+      ]);
+      setPois(Array.isArray(data.pois) ? data.pois : []);
+      if (data.provider) setProvider(String(data.provider));
+      setMode(data.mode === "live" ? "live" : "demo");
+      setStatus(data.mode === "live" ? "实时模式" : "演示模式");
+      speak(reply);
+    } catch {
+      setStatus("网络异常，请重试");
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [geo]);
 
   const onHoldStart = useCallback(() => {
-    if (busy) return;
-    const Ctor = getSpeechRecognition();
+    if (busyRef.current) return;
+    endingRef.current = false;
+
+    // 关键停掉播报，否则麦克风会把上一句 TTS 再识别进去
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* ignore */
+    }
+
+    finalTranscriptRef.current = "";
     transcriptRef.current = "";
+
+    const Ctor = getSpeechRecognition();
     if (!Ctor) {
       setStatus("当前浏览器不支持语音识别，请用下方文字输入");
       return;
     }
+
     const recognition = new Ctor();
     recognition.lang = "zh-CN";
     recognition.interimResults = true;
-    recognition.continuous = true;
+    // continuous=true 在国产手机浏览器上极易同一句反复追加
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+
     recognition.onresult = (event) => {
-      let text = "";
-      for (let i = 0; i < event.results.length; i++) {
-        text += event.results[i][0]?.transcript || "";
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const piece = (result[0]?.transcript || "").trim();
+        if (!piece) continue;
+        if (result.isFinal) {
+          const prev = finalTranscriptRef.current;
+          // 相同 final 不重复拼接
+          if (!prev.endsWith(piece)) {
+            finalTranscriptRef.current = collapseRepeatedSpeech(
+              `${prev}${piece}`,
+            );
+          }
+        } else {
+          interim += piece;
+        }
       }
-      transcriptRef.current = text;
-      setStatus(text || "聆听中…");
+      const merged = collapseRepeatedSpeech(
+        `${finalTranscriptRef.current}${interim}`,
+      );
+      transcriptRef.current = merged;
+      setStatus(merged || "聆听中…");
     };
-    recognition.onerror = () => {
+
+    recognition.onerror = (event) => {
+      if (event.error === "aborted" || event.error === "no-speech") return;
       setStatus("语音识别失败，可改用文字");
     };
+
     recognition.onend = () => {
       setListening(false);
+      // continuous=false 时说完可能自动 end；按住期间自动重启一次会话
+      if (
+        recognitionRef.current === recognition &&
+        !endingRef.current &&
+        !busyRef.current
+      ) {
+        try {
+          recognition.start();
+          setListening(true);
+        } catch {
+          /* ignore */
+        }
+      }
     };
+
     recognitionRef.current = recognition;
     setListening(true);
     setStatus("聆听中…松开即发送");
@@ -177,10 +302,13 @@ export function AssistantShell() {
       recognition.start();
     } catch {
       setStatus("无法启动麦克风");
+      setListening(false);
     }
-  }, [busy]);
+  }, []);
 
   const onHoldEnd = useCallback(() => {
+    if (endingRef.current && !recognitionRef.current) return;
+    endingRef.current = true;
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
     try {
@@ -189,10 +317,15 @@ export function AssistantShell() {
       /* ignore */
     }
     setListening(false);
-    const text = transcriptRef.current.trim();
-    transcriptRef.current = "";
-    if (text) void ask(text);
-    else setStatus("按住按钮开始多轮对话");
+
+    // 稍等最终结果回调
+    window.setTimeout(() => {
+      const text = collapseRepeatedSpeech(transcriptRef.current);
+      finalTranscriptRef.current = "";
+      transcriptRef.current = "";
+      if (text) void ask(text);
+      else setStatus("按住按钮开始多轮对话");
+    }, 180);
   }, [ask]);
 
   return (
