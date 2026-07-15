@@ -155,7 +155,7 @@ export function AssistantShell() {
     void (async () => {
       try {
         const res = await fetch(
-          `/api/amap/mall?lat=${geo.lat}&lng=${geo.lng}&radius=250`,
+          `/api/amap/mall?lat=${geo.lat}&lng=${geo.lng}&radius=1200`,
         );
         const data = await res.json();
         if (cancelled) return;

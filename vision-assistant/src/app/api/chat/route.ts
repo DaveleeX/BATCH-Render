@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   brandPoisToTargets,
   extractBrandQuery,
+  extractNearbyQuery,
   searchBrandInMall,
   searchNearbyPois,
 } from "@/lib/amap";
@@ -25,23 +26,28 @@ function detectIntent(text: string) {
   const brand = extractBrandQuery(text);
   const wantBrand =
     Boolean(brand) &&
-    /在哪|在哪儿|在哪里|在几楼|在几层|在哪层|怎么走|位置|有没有|找/.test(text);
+    /在哪|在哪儿|在哪里|在几楼|在几层|在哪层|怎么走|位置|找(?!一家)/.test(text) &&
+    !/附近有什么|周边有什么|附近有哪些|有什么商场|有哪些商场/.test(text);
+
+  const wantNearby =
+    !wantBrand &&
+    (/附近|周边|周围|推荐|找一家|有没有|有什么|有哪些/.test(text) ||
+      /^(咖啡|咖啡馆|餐厅|娱乐|商场|购物中心)$/.test(text.trim()));
+
   return {
     brand,
     wantBrand,
-    wantNearby:
-      !wantBrand &&
-      (/附近|周边|周围|推荐|找一家|有没有.*(咖啡|餐厅|娱乐|酒吧|景点)|附近.*(咖啡|店|玩)/.test(
-        text,
-      ) ||
-        /^(咖啡|咖啡馆|餐厅|娱乐)$/.test(text.trim())),
+    wantNearby,
     wantWho: /这是谁|他是谁|她是谁|人脸|这人是|认识他|认识她|身份是谁/.test(text),
     wantWhat: /这是什么|什么东西|识别|看一下|这是啥|前面是什么|路上是什么|手办|什么玩意|拍到的是/.test(
       text,
     ),
-    wantWhere: /这是哪里|什么地方|在哪|定位|地址/.test(text) && !wantBrand,
+    wantWhere:
+      /这是哪里|什么地方|定位|地址/.test(text) &&
+      !wantBrand &&
+      !wantNearby,
     wantTrack:
-      /这是什么|什么东西|识别|看一下|这是啥|手办|杯子|品牌|logo|这是谁|他是谁|她是谁|前面是什么|拍到|对准/.test(
+      /这是什么|什么东西|识别|看一下|这是啥|手办|杯子|logo|这是谁|他是谁|她是谁|前面是什么|拍到|对准/.test(
         text,
       ),
   };
@@ -66,6 +72,23 @@ function brandReply(brand: string, mallName: string | undefined, pois: PoiResult
   return where ? `${brand}：${where}。` : `已为你标出附近的${brand}。`;
 }
 
+function nearbyReply(keywords: string, radiusMeters: number, pois: PoiResult[]) {
+  if (!pois.length) {
+    return `${radiusMeters} 米内没找到「${keywords}」。`;
+  }
+  const lines = pois
+    .slice(0, 3)
+    .map((p, i) => {
+      const bits = [
+        p.distanceMeters != null ? `${p.distanceMeters}米` : null,
+        p.floor || null,
+      ].filter(Boolean);
+      return `${i + 1}. ${p.name}${bits.length ? `（${bits.join(" · ")}）` : ""}`;
+    })
+    .join("；");
+  return `${radiusMeters} 米内的${keywords}：${lines}。`;
+}
+
 function demoReply(params: {
   text: string;
   pois: PoiResult[];
@@ -86,14 +109,9 @@ function demoReply(params: {
       params.pois,
     );
   }
-  if (intent.wantNearby && params.pois.length) {
-    const lines = params.pois
-      .map(
-        (p, i) =>
-          `${i + 1}. ${p.name}（${p.distanceMeters ?? "?"}米）${p.crowdLabel ? ` · ${p.crowdLabel}` : ""}`,
-      )
-      .join("\n");
-    return `50 米内推荐：\n${lines}`;
+  if (intent.wantNearby) {
+    const q = extractNearbyQuery(params.text);
+    return nearbyReply(q.keywords, q.radiusMeters, params.pois);
   }
   if (intent.wantWhere && params.geo) {
     return `当前位置约 ${params.geo.lat.toFixed(5)}, ${params.geo.lng.toFixed(5)}。`;
@@ -101,7 +119,7 @@ function demoReply(params: {
   if (intent.wantWhat) {
     return "已收到画面。配置豆包/千问后可直接告诉你这是什么。";
   }
-  return "我在。对准商场可问「星巴克在哪」「优衣库在几楼」。";
+  return "我在。可问「附近有什么商场」「星巴克在哪」。";
 }
 
 export async function POST(req: Request) {
@@ -116,6 +134,7 @@ export async function POST(req: Request) {
   let pois: PoiResult[] = [];
   let matchedPeople: ChatResponseBody["matchedPeople"] = [];
   let brandTargets: ScreenTarget[] = [];
+  let nearbyMeta: { keywords: string; radiusMeters: number } | null = null;
   const mallName = body.mall?.name;
 
   const sideJobs: Promise<void>[] = [];
@@ -135,20 +154,14 @@ export async function POST(req: Request) {
       })(),
     );
   } else if (intent.wantNearby && body.geo) {
+    const q = extractNearbyQuery(text);
+    nearbyMeta = q;
     sideJobs.push(
       (async () => {
-        const keywordMatch = text.match(
-          /(网红)?(热门)?(.{0,8}?)(咖啡|咖啡馆|餐厅|娱乐|酒吧|景点)/,
-        );
-        const keywords = keywordMatch
-          ? `${keywordMatch[3] || ""}${keywordMatch[4]}`.trim() || "咖啡"
-          : /娱乐/.test(text)
-            ? "娱乐"
-            : "咖啡";
         const nearby = await searchNearbyPois({
           geo: body.geo!,
-          keywords,
-          radiusMeters: 50,
+          keywords: q.keywords,
+          radiusMeters: q.radiusMeters,
           limit: 5,
         });
         pois = nearby.pois;
@@ -183,33 +196,40 @@ export async function POST(req: Request) {
     brandTargets: brandTargets.length ? brandTargets : undefined,
     needTrack: Boolean(
       !intent.wantBrand &&
+        !intent.wantNearby &&
         (intent.wantTrack || intent.wantWhat || intent.wantWho),
     ),
     usedTools: Array.from(new Set(usedTools)),
     provider: getActiveProvider(),
   };
 
-  // Brand questions: prefer fast factual reply without waiting on vision LLM
+  // POI factual answers: skip LLM so Amap results aren't rewritten/ignored
   if (intent.wantBrand && intent.brand) {
-    const reply = brandReply(intent.brand, mallName, pois);
     return NextResponse.json({
-      reply,
+      reply: brandReply(intent.brand, mallName, pois),
       ...basePayload,
       mode: pois[0]?.source === "demo" ? "demo" : "live",
     } satisfies ChatResponseBody);
   }
 
-  if (!hasLiveModel()) {
-    const reply = demoReply({
-      text,
-      pois,
-      people: matchedPeople,
-      geo: body.geo,
-      brand: intent.brand,
-      mallName,
-    });
+  if (intent.wantNearby && nearbyMeta) {
     return NextResponse.json({
-      reply,
+      reply: nearbyReply(nearbyMeta.keywords, nearbyMeta.radiusMeters, pois),
+      ...basePayload,
+      mode: pois[0]?.source === "demo" ? "demo" : pois.length ? "live" : "demo",
+    } satisfies ChatResponseBody);
+  }
+
+  if (!hasLiveModel()) {
+    return NextResponse.json({
+      reply: demoReply({
+        text,
+        pois,
+        people: matchedPeople,
+        geo: body.geo,
+        brand: intent.brand,
+        mallName,
+      }),
       ...basePayload,
       mode: "demo",
     } satisfies ChatResponseBody);

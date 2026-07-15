@@ -171,7 +171,7 @@ export async function detectNearbyMall(params: {
   geo: GeoPoint;
   radiusMeters?: number;
 }): Promise<{ mall: MallInfo | null; mode: "live" | "demo"; note?: string }> {
-  const radius = params.radiusMeters ?? 250;
+  const radius = params.radiusMeters ?? 1200;
 
   if (!hasUsableKey()) {
     return {
@@ -399,6 +399,42 @@ export function extractBrandQuery(text: string): string | null {
     return m[1];
   }
   return null;
+}
+
+/** 从「附近有什么商场」等句子抽出搜索词与半径 */
+export function extractNearbyQuery(text: string): {
+  keywords: string;
+  radiusMeters: number;
+} {
+  const t = text.trim();
+  if (/商场|购物中心|百货|奥特莱斯|mall/i.test(t)) {
+    return { keywords: "购物中心", radiusMeters: 1500 };
+  }
+  if (/超市|便利店/.test(t)) {
+    return { keywords: "超市", radiusMeters: 800 };
+  }
+  if (/餐厅|饭店|吃饭|美食|餐馆/.test(t)) {
+    return { keywords: "餐厅", radiusMeters: 500 };
+  }
+  if (/酒吧|nightlife/.test(t)) {
+    return { keywords: "酒吧", radiusMeters: 800 };
+  }
+  if (/娱乐|剧本杀|ktv|KTV/.test(t)) {
+    return { keywords: "娱乐", radiusMeters: 800 };
+  }
+  if (/景点|公园|博物馆/.test(t)) {
+    return { keywords: "景点", radiusMeters: 1500 };
+  }
+  if (/咖啡|cafe/i.test(t)) {
+    return { keywords: "咖啡", radiusMeters: 300 };
+  }
+  const m = t.match(
+    /(?:附近|周边|周围|找|有没有|推荐)\s*(?:的|什么|有什么|有没有)?\s*([\u4e00-\u9fa5A-Za-z]{2,12})/,
+  );
+  if (m?.[1] && !/地方|东西|推荐|热门|网红/.test(m[1])) {
+    return { keywords: m[1], radiusMeters: 800 };
+  }
+  return { keywords: "咖啡", radiusMeters: 300 };
 }
 
 /** Spread brand pins across the viewfinder as a mall-directory cue */
