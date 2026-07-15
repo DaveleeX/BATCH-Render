@@ -2,10 +2,9 @@
 # 在阿里云 ECS / 轻量应用服务器上一键部署览界（国内免 VPN）
 set -euo pipefail
 
- DomAIN="${1:-}"
+DOMAIN="${1:-daveleex.top}"
 if [[ -z "$DOMAIN" ]]; then
-  echo "用法: ./deploy.sh your-domain.com"
-  echo "示例: ./deploy.sh lanjie.example.com"
+  echo "用法: ./deploy.sh daveleex.top"
   exit 1
 fi
 
