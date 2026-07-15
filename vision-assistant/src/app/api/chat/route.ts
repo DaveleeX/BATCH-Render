@@ -1,24 +1,15 @@
 import { NextResponse } from "next/server";
 import { searchNearbyPois } from "@/lib/amap";
 import {
-  demoTargetsForFocus,
-  detectScreenTargets,
-} from "@/lib/detect";
-import {
   generateAssistantReply,
   getActiveProvider,
   hasLiveModel,
 } from "@/lib/model";
 import { matchPeopleInFrame } from "@/lib/people";
-import type {
-  ChatRequestBody,
-  ChatResponseBody,
-  PoiResult,
-  ScreenTarget,
-} from "@/lib/types";
+import type { ChatRequestBody, ChatResponseBody, PoiResult } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 function detectIntent(text: string) {
   const t = text.toLowerCase();
@@ -37,27 +28,6 @@ function detectIntent(text: string) {
         t,
       ),
   };
-}
-
-async function resolveTargets(params: {
-  imageDataUrl?: string;
-  text: string;
-  shouldTrack: boolean;
-}): Promise<ScreenTarget[]> {
-  if (!params.shouldTrack || !params.imageDataUrl?.startsWith("data:image")) {
-    return [];
-  }
-  if (!hasLiveModel()) {
-    return demoTargetsForFocus(params.text);
-  }
-  try {
-    return await detectScreenTargets({
-      imageDataUrl: params.imageDataUrl,
-      focus: params.text,
-    });
-  } catch {
-    return demoTargetsForFocus(params.text);
-  }
 }
 
 function demoReply(params: {
@@ -101,48 +71,52 @@ export async function POST(req: Request) {
   let pois: PoiResult[] = [];
   let matchedPeople: ChatResponseBody["matchedPeople"] = [];
 
+  // Parallelize side tools so reply path is not strictly serial
+  const sideJobs: Promise<void>[] = [];
+
   if (intent.wantNearby && body.geo) {
-    const keywordMatch = text.match(
-      /(网红)?(热门)?(.{0,8}?)(咖啡|咖啡馆|餐厅|娱乐|酒吧|景点)/,
+    sideJobs.push(
+      (async () => {
+        const keywordMatch = text.match(
+          /(网红)?(热门)?(.{0,8}?)(咖啡|咖啡馆|餐厅|娱乐|酒吧|景点)/,
+        );
+        const keywords = keywordMatch
+          ? `${keywordMatch[3] || ""}${keywordMatch[4]}`.trim() || "咖啡"
+          : /娱乐/.test(text)
+            ? "娱乐"
+            : "咖啡";
+        const nearby = await searchNearbyPois({
+          geo: body.geo!,
+          keywords,
+          radiusMeters: 50,
+          limit: 5,
+        });
+        pois = nearby.pois;
+        usedTools.push("amap_nearby");
+      })(),
     );
-    const keywords = keywordMatch
-      ? `${keywordMatch[3] || ""}${keywordMatch[4]}`.trim() || "咖啡"
-      : /娱乐/.test(text)
-        ? "娱乐"
-        : "咖啡";
-    const nearby = await searchNearbyPois({
-      geo: body.geo,
-      keywords,
-      radiusMeters: 50,
-      limit: 5,
-    });
-    pois = nearby.pois;
-    usedTools.push("amap_nearby");
   }
 
-  if (intent.wantWho || /这是谁|人脸/.test(text)) {
-    try {
-      matchedPeople = await matchPeopleInFrame({
-        imageDataUrl: body.imageDataUrl,
-        text,
-      });
-      usedTools.push("people_match");
-    } catch {
-      matchedPeople = [];
-    }
+  // Who-match is a second model call — only when clearly needed
+  if (intent.wantWho) {
+    sideJobs.push(
+      (async () => {
+        try {
+          matchedPeople = await matchPeopleInFrame({
+            imageDataUrl: body.imageDataUrl,
+            text,
+          });
+          usedTools.push("people_match");
+        } catch {
+          matchedPeople = [];
+        }
+      })(),
+    );
   }
 
-  const shouldTrack = Boolean(
-    intent.wantTrack || intent.wantWhat || intent.wantWho,
-  );
+  await Promise.all(sideJobs);
 
   if (!hasLiveModel()) {
-    const targets = await resolveTargets({
-      imageDataUrl: body.imageDataUrl,
-      text,
-      shouldTrack,
-    });
-    if (targets.length) usedTools.push("screen_track");
     const reply = demoReply({
       text,
       pois,
@@ -153,7 +127,8 @@ export async function POST(req: Request) {
       reply,
       pois,
       matchedPeople,
-      targets,
+      // client handles tracking via /api/detect in parallel
+      needTrack: Boolean(intent.wantTrack || intent.wantWhat || intent.wantWho),
       mode: "demo",
       usedTools,
       provider: getActiveProvider(),
@@ -178,49 +153,31 @@ export async function POST(req: Request) {
 
   const isVisionId =
     intent.wantWhat ||
-    /品牌|什么店|哪家|库迪|瑞幸|星巴克|咖啡|logo|标志|这是什么|看一下/.test(
+    /品牌|什么店|哪家|库迪|瑞幸|星巴克|咖啡|logo|标志|这是什么|看一下|手办/.test(
       text,
     );
 
   const system = isVisionId
-    ? `你是「览界」视觉助手。任务：根据摄像头画面准确识别物体/品牌。
-硬规则：
-1. 先尽量读出包装、杯套、瓶标上的中英文印刷文字和 logo，再下结论。
-2. 不要只凭颜色猜测。红色咖啡纸杯在中国很常见，可能是库迪(Cotti，常见@形标志)、瑞幸、星巴克或其他品牌。
-3. 若能看见 Cotti / 库迪 / @ 形标志，优先判为库迪咖啡。
-4. 看不清就说「杯套文字看不清，请对准 logo 再拍」，不要硬猜错品牌。
-5. 最终只用 1-2 句中文回答，先说品牌名，再说依据（看见了什么字/标志）。
+    ? `你是「览界」视觉助手。根据画面快速识别。
+规则：读清文字/logo 再下结论；看不清就直说；只回 1 句中文，不超过 40 字。
 地理：${body.geo ? `${body.geo.lat.toFixed(5)}, ${body.geo.lng.toFixed(5)}` : "未知"}`
-    : `你是「览界」眼镜助手（手机 Demo）。像面对面说话：短、准、不啰嗦。
-硬规则：
-1. 中文，默认 1-2 句，最多 60 字；附近地点最多列 3 条。
-2. 禁止复读用户原话，禁止套话开场。
-3. 画面不清楚就说「没看清，对准再问」，不要编造。
-4. 人数只有估算时说「大约」。适合语音朗读，少括号少 Markdown。
+    : `你是「览界」眼镜助手。短、准、中文 1 句，最多 40 字。禁止复读用户。
 地理：${body.geo ? `${body.geo.lat.toFixed(5)}, ${body.geo.lng.toFixed(5)}` : "未知"}
-附近候选：${poiHint}
-已匹配人物：${peopleHint}`;
+附近：${poiHint}
+人物：${peopleHint}`;
 
   const prompt = isVisionId
-    ? `${text}
-
-请仔细看图：优先识别杯套/杯身/包装上的品牌文字与 logo，再回答。`
+    ? `${text}\n看图后一句回答，先说名称。`
     : text;
 
   try {
-    const targetsPromise = resolveTargets({
-      imageDataUrl: body.imageDataUrl,
-      text,
-      shouldTrack,
-    });
-
     let reply = await generateAssistantReply({
       system,
       text: prompt,
       imageDataUrl: body.imageDataUrl,
-      // 品牌识别少带历史，避免被上一句错误答案带偏
       history: isVisionId ? [] : history,
-      enableThinking: Boolean(isVisionId && body.imageDataUrl),
+      enableThinking: false,
+      maxOutputTokens: 120,
     });
     reply = reply.replace(/（[^）]*演示[^）]*）/g, "").trim();
     if (!reply) {
@@ -232,25 +189,17 @@ export async function POST(req: Request) {
       });
     }
 
-    const targets = await targetsPromise;
-    if (targets.length) usedTools.push("screen_track");
-
     return NextResponse.json({
       reply,
       pois,
       matchedPeople,
-      targets,
+      needTrack: Boolean(intent.wantTrack || intent.wantWhat || intent.wantWho),
       mode: "live",
       usedTools: Array.from(new Set(usedTools)),
       provider: getActiveProvider(),
     } satisfies ChatResponseBody);
   } catch (err) {
     const message = err instanceof Error ? err.message : "model_error";
-    const targets = await resolveTargets({
-      imageDataUrl: body.imageDataUrl,
-      text,
-      shouldTrack,
-    }).catch(() => [] as ScreenTarget[]);
     return NextResponse.json({
       reply: demoReply({
         text,
@@ -260,7 +209,7 @@ export async function POST(req: Request) {
       }),
       pois,
       matchedPeople,
-      targets,
+      needTrack: Boolean(intent.wantTrack || intent.wantWhat || intent.wantWho),
       mode: "demo",
       usedTools,
       provider: getActiveProvider(),

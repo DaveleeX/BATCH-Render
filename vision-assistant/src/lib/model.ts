@@ -135,16 +135,19 @@ export async function quickVisionText(params: {
   system: string;
   prompt: string;
   imageDataUrl?: string;
+  maxOutputTokens?: number;
 }): Promise<string | null> {
   const resolved = resolveVisionModel();
   if (!resolved) return null;
+  const maxTokens = params.maxOutputTokens ?? 160;
 
   if (resolved.provider === "doubao") {
     return doubaoRespond({
       system: params.system,
       prompt: params.prompt,
       imageDataUrl: params.imageDataUrl,
-      maxOutputTokens: 400,
+      maxOutputTokens: maxTokens,
+      enableThinking: false,
     });
   }
 
@@ -163,7 +166,7 @@ export async function quickVisionText(params: {
     model,
     system: params.system,
     messages: [{ role: "user", content }],
-    maxOutputTokens: 400,
+    maxOutputTokens: maxTokens,
   });
   return result.text.trim();
 }
@@ -174,9 +177,13 @@ export async function generateAssistantReply(params: {
   imageDataUrl?: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   enableThinking?: boolean;
+  maxOutputTokens?: number;
 }): Promise<string> {
   const resolved = resolveVisionModel();
   if (!resolved) throw new Error("no_model");
+  // Prefer speed: thinking off unless caller explicitly enables
+  const thinking = Boolean(params.enableThinking);
+  const maxTokens = params.maxOutputTokens ?? (thinking ? 600 : 140);
 
   if (resolved.provider === "doubao") {
     return doubaoRespond({
@@ -184,8 +191,8 @@ export async function generateAssistantReply(params: {
       prompt: params.text,
       imageDataUrl: params.imageDataUrl,
       history: params.history,
-      enableThinking: params.enableThinking,
-      maxOutputTokens: params.enableThinking ? 1800 : 360,
+      enableThinking: thinking,
+      maxOutputTokens: maxTokens,
     });
   }
 
@@ -195,7 +202,7 @@ export async function generateAssistantReply(params: {
   const result = await generateText({
     model,
     system: params.system,
-    temperature: params.enableThinking ? 0.2 : 0.4,
+    temperature: thinking ? 0.2 : 0.35,
     messages: [
       ...(params.history || []).map((m) => ({
         role: m.role,
@@ -211,7 +218,7 @@ export async function generateAssistantReply(params: {
         ],
       },
     ],
-    maxOutputTokens: params.enableThinking ? 500 : 220,
+    maxOutputTokens: maxTokens,
   });
   return result.text.trim();
 }

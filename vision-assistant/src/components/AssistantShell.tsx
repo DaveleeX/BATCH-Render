@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import { CameraView, captureFrame } from "@/components/CameraView";
 import { TalkButton } from "@/components/TalkButton";
 import { ChatOverlay } from "@/components/ChatOverlay";
-import { TrackOverlay } from "@/components/TrackOverlay";
+import { TrackOverlay, type TrackOverlayHandle } from "@/components/TrackOverlay";
 import type { ScreenTarget } from "@/lib/types";
 import {
   createPatch,
@@ -124,18 +124,21 @@ export function AssistantShell() {
   const [provider, setProvider] = useState("demo");
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [camRestart, setCamRestart] = useState(0);
-  const [targets, setTargets] = useState<ScreenTarget[]>([]);
-  const [trackSession, setTrackSession] = useState(0);
+  const [trackingActive, setTrackingActive] = useState(false);
   const targetsRef = useRef<ScreenTarget[]>([]);
   const patchesRef = useRef<Map<string, PatchStateHandle>>(new Map());
   const trackFocusRef = useRef<string>("");
   const trackGenRef = useRef(0);
+  const overlayRef = useRef<TrackOverlayHandle>(null);
+  const patchRefreshRef = useRef(0);
 
-  useEffect(() => {
-    targetsRef.current = targets;
-  }, [targets]);
+  const wantsTrack = useCallback((q: string) => {
+    return /这是什么|什么东西|识别|看一下|这是啥|手办|杯子|品牌|logo|这是谁|他是谁|她是谁|前面是什么|拍到|对准/.test(
+      q,
+    );
+  }, []);
 
-  const seedTargets = useCallback((next: ScreenTarget[]) => {
+  const beginTracking = useCallback((next: ScreenTarget[], focus?: string) => {
     const video = videoRef.current;
     const patches = new Map<string, PatchStateHandle>();
     if (video) {
@@ -150,95 +153,98 @@ export function AssistantShell() {
       }
     }
     patchesRef.current = patches;
-    setTargets(next);
-  }, []);
-
-  const beginTracking = useCallback(
-    (next: ScreenTarget[], focus?: string) => {
-      if (focus) trackFocusRef.current = focus;
-      trackGenRef.current += 1;
-      setTrackSession((n) => n + 1);
-      seedTargets(next);
-    },
-    [seedTargets],
-  );
+    targetsRef.current = next;
+    if (focus) trackFocusRef.current = focus;
+    trackGenRef.current += 1;
+    patchRefreshRef.current = 0;
+    overlayRef.current?.sync(next, facing === "user");
+    setTrackingActive(next.length > 0);
+  }, [facing]);
 
   const clearTargets = useCallback(() => {
     patchesRef.current = new Map();
+    targetsRef.current = [];
     trackFocusRef.current = "";
     trackGenRef.current += 1;
-    setTrackSession((n) => n + 1);
-    setTargets([]);
+    overlayRef.current?.clear();
+    setTrackingActive(false);
   }, []);
 
-  // Optical follow between vision polls
+  // Optical follow — DOM moves only, no React setState
   useEffect(() => {
-    if (!targets.length) return;
+    if (!trackingActive) return;
     let raf = 0;
     let last = 0;
+    const gen = trackGenRef.current;
 
     const tick = (now: number) => {
       raf = window.requestAnimationFrame(tick);
-      if (now - last < 70) return;
+      if (gen !== trackGenRef.current) return;
+      if (now - last < 100) return; // ~10fps optical is enough
       last = now;
       const video = videoRef.current;
-      if (!video || !video.videoWidth) return;
-
+      if (!video?.videoWidth) return;
       const current = targetsRef.current;
       if (!current.length) return;
 
-      let changed = false;
+      patchRefreshRef.current += 1;
+      const refreshPatch = patchRefreshRef.current % 8 === 0;
+
       const next = current.map((t) => {
         const prevPatch = patchesRef.current.get(t.id) || null;
         const hit = trackBoxStep(
           video,
           { cx: t.cx, cy: t.cy, w: t.w, h: t.h },
           prevPatch,
-          144,
+          96,
         );
-        if (!hit) return t;
-        // Lost lock: keep last position
-        if (hit.score > 55) return t;
-        patchesRef.current.set(t.id, hit.patch);
-        const dx = Math.abs(hit.box.cx - t.cx);
-        const dy = Math.abs(hit.box.cy - t.cy);
-        if (dx < 0.002 && dy < 0.002) return t;
-        changed = true;
-        // Lerp for smoother AR feel
+        if (!hit || hit.score > 70) return t;
+        if (refreshPatch) {
+          const fresh = createPatch(video, hit.box, 96);
+          if (fresh) patchesRef.current.set(t.id, fresh);
+          else patchesRef.current.set(t.id, hit.patch);
+        } else {
+          patchesRef.current.set(t.id, hit.patch);
+        }
         return {
           ...t,
-          cx: t.cx * 0.35 + hit.box.cx * 0.65,
-          cy: t.cy * 0.35 + hit.box.cy * 0.65,
+          cx: t.cx * 0.45 + hit.box.cx * 0.55,
+          cy: t.cy * 0.45 + hit.box.cy * 0.55,
         };
       });
 
-      if (changed) {
-        targetsRef.current = next;
-        setTargets(next);
-      }
+      targetsRef.current = next;
+      overlayRef.current?.move(
+        next.map((t) => ({ id: t.id, cx: t.cx, cy: t.cy, w: t.w, h: t.h })),
+        facing === "user",
+      );
     };
 
     raf = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(raf);
-  }, [targets.length]);
+  }, [trackingActive, facing]);
 
-  // Periodic vision re-localize so pins stay on the real object
+  // Rare vision re-localize (does not block chat)
   useEffect(() => {
-    if (!targets.length) return;
+    if (!trackingActive) return;
     const gen = trackGenRef.current;
     let cancelled = false;
     let timer = 0;
 
     const poll = async () => {
       if (cancelled || gen !== trackGenRef.current) return;
-      const video = videoRef.current;
-      if (!video?.videoWidth || busyRef.current) {
-        timer = window.setTimeout(poll, 1600);
+      if (document.hidden || busyRef.current) {
+        timer = window.setTimeout(poll, 4000);
         return;
       }
-      const imageDataUrl = captureFrame(video, 900, 0.78);
+      const video = videoRef.current;
+      if (!video?.videoWidth) {
+        timer = window.setTimeout(poll, 4000);
+        return;
+      }
+      const imageDataUrl = captureFrame(video, 640, 0.65);
       if (!imageDataUrl) {
-        timer = window.setTimeout(poll, 1600);
+        timer = window.setTimeout(poll, 4000);
         return;
       }
       try {
@@ -248,7 +254,7 @@ export function AssistantShell() {
           body: JSON.stringify({
             imageDataUrl,
             focus: trackFocusRef.current || undefined,
-            hints: targetsRef.current.map((t) => t.label),
+            hints: targetsRef.current.map((t) => t.label).slice(0, 2),
           }),
         });
         const data = await res.json();
@@ -256,33 +262,39 @@ export function AssistantShell() {
         const fresh = Array.isArray(data.targets)
           ? (data.targets as ScreenTarget[])
           : [];
-        if (!fresh.length) {
-          timer = window.setTimeout(poll, 2200);
-          return;
+        if (fresh.length) {
+          const prev = targetsRef.current;
+          const merged = fresh.slice(0, 2).map((f, i) => {
+            const byLabel = prev.find((p) => p.label === f.label);
+            const id = byLabel?.id || prev[i]?.id || f.id || nanoid(8);
+            return { ...f, id };
+          });
+          const videoEl = videoRef.current;
+          const patches = new Map<string, PatchStateHandle>();
+          if (videoEl) {
+            for (const t of merged) {
+              const patch = createPatch(videoEl, t, 96);
+              if (patch) patches.set(t.id, patch);
+            }
+          }
+          patchesRef.current = patches;
+          targetsRef.current = merged;
+          overlayRef.current?.sync(merged, facing === "user");
         }
-
-        const prev = targetsRef.current;
-        const merged: ScreenTarget[] = fresh.map((f, i) => {
-          const byLabel = prev.find((p) => p.label === f.label);
-          const byIndex = prev[i];
-          const id = byLabel?.id || byIndex?.id || f.id || nanoid(8);
-          return { ...f, id };
-        });
-        seedTargets(merged);
       } catch {
-        /* keep optical track */
+        /* optical only */
       }
       if (!cancelled && gen === trackGenRef.current) {
-        timer = window.setTimeout(poll, 1800);
+        timer = window.setTimeout(poll, 5000);
       }
     };
 
-    timer = window.setTimeout(poll, 1400);
+    timer = window.setTimeout(poll, 5000);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [trackSession, seedTargets]);
+  }, [trackingActive, facing]);
 
   useEffect(() => {
     historyRef.current = messages
@@ -338,12 +350,28 @@ export function AssistantShell() {
     };
     setMessages((prev) => [...prev, userMsg]);
 
+    // Smaller frame → faster upload + model TTFT
     const imageDataUrl = videoRef.current
-      ? captureFrame(videoRef.current, 1600, 0.92)
+      ? captureFrame(videoRef.current, 960, 0.72)
       : undefined;
 
-    // 只用当前轮之前的历史，避免把本轮用户句再塞一遍
     const history = historyRef.current.slice(-6);
+    const track = wantsTrack(cleaned);
+
+    // Kick detect in parallel — never block chat reply wait
+    const detectPromise =
+      track && imageDataUrl
+        ? fetch("/api/detect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageDataUrl,
+              focus: cleaned,
+            }),
+          })
+            .then((r) => r.json())
+            .catch(() => null)
+        : null;
 
     try {
       const res = await fetch("/api/chat", {
@@ -358,7 +386,6 @@ export function AssistantShell() {
       });
       const data = await res.json();
       let reply = String(data.reply || "我没听清，再说一次？");
-      // 若模型几乎原样复读用户，截断提示
       if (
         reply.replace(/\s/g, "").includes(cleaned.replace(/\s/g, "")) &&
         reply.length < cleaned.length + 8
@@ -377,29 +404,50 @@ export function AssistantShell() {
       setPois(Array.isArray(data.pois) ? data.pois : []);
       if (data.provider) setProvider(String(data.provider));
       setMode(data.mode === "live" ? "live" : "demo");
-      setStatus(
-        Array.isArray(data.targets) && data.targets.length
-          ? "已锁定目标 · 定位中"
-          : data.mode === "live"
-            ? "实时模式"
-            : "演示模式",
-      );
-      if (Array.isArray(data.targets) && data.targets.length) {
-        beginTracking(data.targets as ScreenTarget[], cleaned);
-      } else if (
+      setStatus(data.mode === "live" ? "实时模式" : "演示模式");
+      speak(reply);
+
+      if (
         /附近|周边|推荐/.test(cleaned) &&
-        !/这是什么|手办|识别|看一眼|这是谁/.test(cleaned)
+        !track
       ) {
         clearTargets();
       }
-      speak(reply);
+
+      // Apply pins when ready without delaying TTS
+      if (detectPromise) {
+        void detectPromise.then((det) => {
+          const targets = Array.isArray(det?.targets)
+            ? (det.targets as ScreenTarget[])
+            : [];
+          if (targets.length) {
+            beginTracking(targets.slice(0, 2), cleaned);
+            setStatus("已锁定目标");
+          }
+        });
+      } else if (data.needTrack && imageDataUrl) {
+        // fallback if chat says need track but parallel didn't start
+        void fetch("/api/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl, focus: cleaned }),
+        })
+          .then((r) => r.json())
+          .then((det) => {
+            const targets = Array.isArray(det?.targets)
+              ? (det.targets as ScreenTarget[])
+              : [];
+            if (targets.length) beginTracking(targets.slice(0, 2), cleaned);
+          })
+          .catch(() => undefined);
+      }
     } catch {
       setStatus("网络异常，请重试");
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [geo, beginTracking, clearTargets]);
+  }, [geo, beginTracking, clearTargets, wantsTrack]);
 
   const onHoldStart = useCallback(() => {
     if (busyRef.current) return;
@@ -516,7 +564,7 @@ export function AssistantShell() {
         restartSignal={camRestart}
       />
 
-      <TrackOverlay targets={targets} mirrored={facing === "user"} />
+      <TrackOverlay ref={overlayRef} mirrored={facing === "user"} />
 
       <header className="absolute inset-x-0 top-0 z-40 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3">
@@ -529,7 +577,7 @@ export function AssistantShell() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {targets.length ? (
+            {trackingActive ? (
               <button
                 type="button"
                 onClick={clearTargets}

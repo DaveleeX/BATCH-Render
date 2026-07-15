@@ -73,8 +73,8 @@ export type ChatResponseBody = {
     bio?: string;
     confidence?: number;
   }>;
-  /** screen-space pins for recognized objects */
-  targets?: ScreenTargetDto[];
+  /** client should fire /api/detect after reply */
+  needTrack?: boolean;
   mode: "live" | "demo";
   usedTools?: string[];
   provider?: string;

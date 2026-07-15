@@ -1,5 +1,5 @@
 /**
- * Client-side patch tracker: keeps pins sticky between slow vision polls.
+ * Lightweight client patch tracker — reused canvas, coarse search, no per-frame alloc storms.
  */
 
 export type TrackBox = {
@@ -9,7 +9,7 @@ export type TrackBox = {
   h: number;
 };
 
-type PatchState = {
+export type PatchStateHandle = {
   gray: Float32Array;
   pw: number;
   ph: number;
@@ -19,116 +19,127 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
 }
 
-function toGray(
-  data: Uint8ClampedArray,
-  w: number,
-  h: number,
-): Float32Array {
-  const out = new Float32Array(w * h);
+function toGray(data: Uint8ClampedArray, w: number, h: number, out?: Float32Array) {
+  const buf = out && out.length >= w * h ? out : new Float32Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    out[p] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    buf[p] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
   }
-  return out;
+  return buf;
 }
 
-function samplePatch(
-  video: HTMLVideoElement,
-  box: TrackBox,
-  workW = 160,
-): { patch: PatchState; box: TrackBox } | null {
-  if (!video.videoWidth || !video.videoHeight) return null;
-  const aspect = video.videoWidth / video.videoHeight;
-  const canvasW = workW;
-  const canvasH = Math.max(1, Math.round(workW / aspect));
-  const canvas = document.createElement("canvas");
-  canvas.width = canvasW;
-  canvas.height = canvasH;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-  ctx.drawImage(video, 0, 0, canvasW, canvasH);
+/** Shared scratch for all trackers on page */
+let sharedCanvas: HTMLCanvasElement | null = null;
+let sharedCtx: CanvasRenderingContext2D | null = null;
+let sharedFrameGray: Float32Array | null = null;
 
-  const pw = Math.max(8, Math.round(box.w * canvasW));
-  const ph = Math.max(8, Math.round(box.h * canvasH));
-  const x0 = clamp(Math.round(box.cx * canvasW - pw / 2), 0, canvasW - pw);
-  const y0 = clamp(Math.round(box.cy * canvasH - ph / 2), 0, canvasH - ph);
-  const img = ctx.getImageData(x0, y0, pw, ph);
-  return {
-    patch: { gray: toGray(img.data, pw, ph), pw, ph },
-    box: {
-      cx: (x0 + pw / 2) / canvasW,
-      cy: (y0 + ph / 2) / canvasH,
-      w: pw / canvasW,
-      h: ph / canvasH,
-    },
-  };
+function getScratch(workW: number, workH: number) {
+  if (!sharedCanvas) {
+    sharedCanvas = document.createElement("canvas");
+    sharedCtx = sharedCanvas.getContext("2d", {
+      willReadFrequently: true,
+      alpha: false,
+    });
+  }
+  if (!sharedCtx) return null;
+  if (sharedCanvas.width !== workW || sharedCanvas.height !== workH) {
+    sharedCanvas.width = workW;
+    sharedCanvas.height = workH;
+  }
+  return sharedCtx;
 }
 
 function sadScore(
   frame: Float32Array,
   fw: number,
-  fh: number,
-  patch: PatchState,
+  patch: PatchStateHandle,
   x: number,
   y: number,
 ): number {
   let sum = 0;
   const { gray, pw, ph } = patch;
-  for (let row = 0; row < ph; row++) {
+  // subsample every 2nd pixel inside patch for speed
+  for (let row = 0; row < ph; row += 2) {
     const fOff = (y + row) * fw + x;
     const pOff = row * pw;
-    for (let col = 0; col < pw; col++) {
+    for (let col = 0; col < pw; col += 2) {
       sum += Math.abs(frame[fOff + col] - gray[pOff + col]);
     }
   }
-  return sum / (pw * ph);
+  return sum;
+}
+
+export function createPatch(
+  video: HTMLVideoElement,
+  box: TrackBox,
+  workW = 96,
+): PatchStateHandle | null {
+  if (!video.videoWidth) return null;
+  const aspect = video.videoWidth / video.videoHeight;
+  const canvasH = Math.max(1, Math.round(workW / aspect));
+  const ctx = getScratch(workW, canvasH);
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, workW, canvasH);
+
+  const pw = clamp(Math.round(box.w * workW), 10, 22);
+  const ph = clamp(Math.round(box.h * canvasH), 10, 22);
+  const x0 = clamp(Math.round(box.cx * workW - pw / 2), 0, workW - pw);
+  const y0 = clamp(Math.round(box.cy * canvasH - ph / 2), 0, canvasH - ph);
+  const img = ctx.getImageData(x0, y0, pw, ph);
+  return { gray: toGray(img.data, pw, ph), pw, ph };
 }
 
 /**
- * Search near previous box; return updated normalized center or null if lost.
+ * One cheap search step. Returns null if frame unavailable.
  */
 export function trackBoxStep(
   video: HTMLVideoElement,
   box: TrackBox,
-  patch: PatchState | null,
-  workW = 160,
-): { box: TrackBox; patch: PatchState; score: number } | null {
-  if (!video.videoWidth || !video.videoHeight) return null;
-
+  patch: PatchStateHandle | null,
+  workW = 96,
+): { box: TrackBox; patch: PatchStateHandle; score: number } | null {
+  if (!video.videoWidth) return null;
   const aspect = video.videoWidth / video.videoHeight;
-  const canvasW = workW;
   const canvasH = Math.max(1, Math.round(workW / aspect));
-  const canvas = document.createElement("canvas");
-  canvas.width = canvasW;
-  canvas.height = canvasH;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const ctx = getScratch(workW, canvasH);
   if (!ctx) return null;
-  ctx.drawImage(video, 0, 0, canvasW, canvasH);
-  const frameImg = ctx.getImageData(0, 0, canvasW, canvasH);
-  const frame = toGray(frameImg.data, canvasW, canvasH);
+  ctx.drawImage(video, 0, 0, workW, canvasH);
+  const frameImg = ctx.getImageData(0, 0, workW, canvasH);
+  sharedFrameGray = toGray(
+    frameImg.data,
+    workW,
+    canvasH,
+    sharedFrameGray || undefined,
+  );
+  const frame = sharedFrameGray;
 
-  let activePatch = patch;
-  if (!activePatch) {
-    const sampled = samplePatch(video, box, workW);
-    if (!sampled) return null;
-    activePatch = sampled.patch;
+  let active = patch || createPatch(video, box, workW);
+  if (!active) return null;
+
+  // Cap patch cost
+  if (active.pw > 22 || active.ph > 22) {
+    active = {
+      ...active,
+      pw: Math.min(active.pw, 22),
+      ph: Math.min(active.ph, 22),
+    };
   }
 
-  const { pw, ph } = activePatch;
-  const searchR = Math.max(8, Math.round(Math.max(canvasW, canvasH) * 0.12));
-  const cxPx = Math.round(box.cx * canvasW);
+  const { pw, ph } = active;
+  const searchR = Math.max(6, Math.round(Math.max(workW, canvasH) * 0.08));
+  const cxPx = Math.round(box.cx * workW);
   const cyPx = Math.round(box.cy * canvasH);
-  const xMin = clamp(cxPx - searchR - Math.floor(pw / 2), 0, canvasW - pw);
-  const xMax = clamp(cxPx + searchR - Math.floor(pw / 2), 0, canvasW - pw);
-  const yMin = clamp(cyPx - searchR - Math.floor(ph / 2), 0, canvasH - ph);
-  const yMax = clamp(cyPx + searchR - Math.floor(ph / 2), 0, canvasH - ph);
+  const xMin = clamp(cxPx - searchR - (pw >> 1), 0, workW - pw);
+  const xMax = clamp(cxPx + searchR - (pw >> 1), 0, workW - pw);
+  const yMin = clamp(cyPx - searchR - (ph >> 1), 0, canvasH - ph);
+  const yMax = clamp(cyPx + searchR - (ph >> 1), 0, canvasH - ph);
 
   let best = Infinity;
   let bestX = xMin;
   let bestY = yMin;
-  const step = pw > 24 ? 2 : 1;
+  const step = 3;
   for (let y = yMin; y <= yMax; y += step) {
     for (let x = xMin; x <= xMax; x += step) {
-      const s = sadScore(frame, canvasW, canvasH, activePatch, x, y);
+      const s = sadScore(frame, workW, active, x, y);
       if (s < best) {
         best = s;
         bestX = x;
@@ -137,31 +148,28 @@ export function trackBoxStep(
     }
   }
 
-  // Resample patch at best location for next frame drift
-  const img = ctx.getImageData(bestX, bestY, pw, ph);
-  const nextPatch: PatchState = {
-    gray: toGray(img.data, pw, ph),
-    pw,
-    ph,
-  };
+  // Refine 1px around best
+  for (let y = bestY - 2; y <= bestY + 2; y++) {
+    for (let x = bestX - 2; x <= bestX + 2; x++) {
+      if (x < 0 || y < 0 || x > workW - pw || y > canvasH - ph) continue;
+      const s = sadScore(frame, workW, active, x, y);
+      if (s < best) {
+        best = s;
+        bestX = x;
+        bestY = y;
+      }
+    }
+  }
 
+  // Refresh template every step is expensive — only occasionally via caller
   return {
     box: {
-      cx: (bestX + pw / 2) / canvasW,
+      cx: (bestX + pw / 2) / workW,
       cy: (bestY + ph / 2) / canvasH,
       w: box.w,
       h: box.h,
     },
-    patch: nextPatch,
-    score: best,
+    patch: active,
+    score: best / ((pw * ph) / 4),
   };
 }
-
-export function createPatch(
-  video: HTMLVideoElement,
-  box: TrackBox,
-): PatchState | null {
-  return samplePatch(video, box)?.patch || null;
-}
-
-export type PatchStateHandle = PatchState;

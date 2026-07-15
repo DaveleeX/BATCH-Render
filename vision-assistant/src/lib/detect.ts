@@ -133,6 +133,7 @@ ${hintLine}
     system: DETECT_SYSTEM,
     prompt,
     imageDataUrl: params.imageDataUrl,
+    maxOutputTokens: 120,
   });
 
   if (!text) return [];
