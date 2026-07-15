@@ -1,20 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b1210;
-  --foreground: #f3f7f4;
-  --accent: #1ec8a0;
-  --sand: #f3efe6;
-  /* 不依赖 Google Fonts，保证国内免 VPN 可加载 */
-  --font-display: "Avenir Next Condensed", "DIN Alternate", "PingFang SC",
-    "HarmonyOS Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-sans: "PingFang SC", "HarmonyOS Sans SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", sans-serif;
+  /* Nike chrome — DESIGN.md */
+  --ink: #111111;
+  --on-primary: #ffffff;
+  --canvas: #ffffff;
+  --soft-cloud: #f5f5f5;
+  --charcoal: #39393b;
+  --mute: #707072;
+  --stone: #9e9ea0;
+  --hairline: #cacacb;
+  --hairline-soft: #e5e5e5;
+  --sale: #d30005;
+  --success: #007d48;
+
+  --background: #111111;
+  --foreground: #ffffff;
+
+  /* Futura/Helvetica substitutes — no Google CDN (China-friendly) */
+  --font-display: "Arial Narrow", "PingFang SC", "Helvetica Neue", Helvetica,
+    Arial, sans-serif;
+  --font-sans: Helvetica, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", Arial, sans-serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-canvas: var(--canvas);
+  --color-soft-cloud: var(--soft-cloud);
+  --color-mute: var(--mute);
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
 }
@@ -27,27 +43,53 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--ink);
+  color: var(--on-primary);
 }
 
 .lanjie-body {
   font-family: var(--font-sans);
-  letter-spacing: 0.01em;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.nike-display {
+  font-family: var(--font-display);
+  font-weight: 500;
+  text-transform: uppercase;
+  line-height: 0.9;
+  letter-spacing: 0;
+}
+
+.nike-pill {
+  border-radius: 30px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.nike-pill-primary {
+  background: var(--ink);
+  color: var(--on-primary);
+}
+
+.nike-pill-on-image {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.nike-pill-secondary {
+  background: var(--soft-cloud);
+  color: var(--ink);
+}
+
+.nike-tap:active {
+  transform: scale(0.96);
+  opacity: 0.85;
 }
 
 button,
 input {
   font: inherit;
-}
-
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.92);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(1.2);
-    opacity: 0;
-  }
 }

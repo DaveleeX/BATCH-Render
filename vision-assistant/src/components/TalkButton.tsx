@@ -21,7 +21,6 @@ export function TalkButton({
   useEffect(() => {
     const end = (e: Event) => {
       if (!pressing.current) return;
-      // 忽略 mouse 在 touch 之后的二次触发
       if (e.type === "mouseup" && (e as MouseEvent).detail === 0) return;
       pressing.current = false;
       setActive(false);
@@ -50,28 +49,24 @@ export function TalkButton({
     onHoldStart();
   };
 
+  const pressed = active || listening;
+
   return (
     <button
       type="button"
       disabled={disabled}
-      aria-pressed={active || listening}
+      aria-pressed={pressed}
       className={[
-        "relative mx-auto flex h-24 w-24 touch-none items-center justify-center rounded-full",
-        "bg-[linear-gradient(145deg,#1ec8a0,#0e7f6b)] text-[#07140f]",
-        "shadow-[0_10px_40px_rgba(16,180,140,0.35)]",
-        "transition-transform duration-200 ease-out",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        "select-none [-webkit-user-callout:none]",
-        active || listening ? "scale-110" : "scale-100",
+        "nike-pill nike-pill-primary nike-tap relative mx-auto flex h-12 w-full max-w-xs touch-none items-center justify-center",
+        "px-8 select-none [-webkit-user-select:none]",
+        "disabled:cursor-not-allowed disabled:opacity-40",
+        pressed ? "scale-[0.97] opacity-90" : "",
       ].join(" ")}
       onPointerDown={begin}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {(active || listening) && (
-        <span className="absolute inset-[-10px] animate-ping rounded-full bg-[#1ec8a0]/25" />
-      )}
-      <span className="relative z-10 text-sm font-semibold tracking-wide">
-        {listening ? "聆听中" : "按住说话"}
+      <span className="text-[15px] font-medium tracking-wide">
+        {listening ? "LISTENING · 聆听中" : "HOLD TO TALK · 按住说话"}
       </span>
     </button>
   );

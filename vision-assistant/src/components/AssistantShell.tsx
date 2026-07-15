@@ -329,30 +329,30 @@ export function AssistantShell() {
   }, [ask]);
 
   return (
-    <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#0d1a16] text-[#f3f7f4]">
+    <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#111111] text-white">
       <CameraView
         facingMode={facing}
         onReady={onReady}
         restartSignal={camRestart}
       />
 
-      <header className="absolute inset-x-0 top-0 z-40 px-5 pt-[max(1.1rem,env(safe-area-inset-top))]">
+      <header className="absolute inset-x-0 top-0 z-40 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-md items-start justify-between gap-3">
-          <div className="rounded-2xl bg-black/45 px-3 py-2 backdrop-blur-md">
-            <p className="font-[family-name:var(--font-display)] text-3xl leading-none tracking-tight text-[#f6fff9]">
+          <div>
+            <p className="nike-display text-[42px] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
               览界
             </p>
-            <p className="mt-1 max-w-[14rem] text-xs text-[#d9efe6]/95">
-              看见，并告诉你答案
+            <p className="mt-1 max-w-[13rem] text-[12px] font-medium text-white/85">
+              SEE MORE. ASK ANYTHING.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <span className="rounded-full bg-[#f3efe6] px-2.5 py-1 text-[11px] font-semibold tracking-wide text-[#132019]">
-              {mode === "live" ? provider.toUpperCase() : "DEMO"}
+            <span className="nike-pill bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-[#111111]">
+              {mode === "live" ? provider : "demo"}
             </span>
             <Link
               href="/profile"
-              className="rounded-full bg-[#1ec8a0] px-3 py-1.5 text-xs font-semibold text-[#07140f]"
+              className="nike-pill nike-pill-on-image nike-tap px-4 py-2 text-[12px] font-medium"
             >
               我的身份
             </Link>
@@ -364,11 +364,11 @@ export function AssistantShell() {
 
       <div className="absolute inset-x-0 bottom-0 z-30 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
         <div className="mx-auto max-w-md">
-          <div className="mb-3 flex items-center justify-between gap-3 px-1">
+          <div className="mb-3 flex items-center justify-between gap-2 px-0.5">
             <div className="flex gap-2">
               <button
                 type="button"
-                className="rounded-full bg-black/40 px-3 py-1.5 text-xs text-[#d7fff2] backdrop-blur-md"
+                className="nike-pill nike-tap bg-white/95 px-3 py-1.5 text-[11px] font-medium text-[#111111]"
                 onClick={() =>
                   setFacing((f) => (f === "environment" ? "user" : "environment"))
                 }
@@ -377,13 +377,13 @@ export function AssistantShell() {
               </button>
               <button
                 type="button"
-                className="rounded-full bg-black/40 px-3 py-1.5 text-xs text-[#d7fff2] backdrop-blur-md"
+                className="nike-pill nike-tap bg-[#f5f5f5]/95 px-3 py-1.5 text-[11px] font-medium text-[#111111]"
                 onClick={() => setCamRestart((n) => n + 1)}
               >
                 重试摄像头
               </button>
             </div>
-            <p className="text-[11px] text-[#c6e6da]/80">
+            <p className="text-[11px] font-medium text-white/70">
               {geo
                 ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`
                 : "定位中…"}
@@ -409,13 +409,13 @@ export function AssistantShell() {
             <input
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
-              placeholder="或直接打字：附近热门咖啡馆"
-              className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/45 px-4 py-2.5 text-sm text-[#f4fff9] outline-none backdrop-blur-md placeholder:text-white/40"
+              placeholder="打字提问：附近热门咖啡馆"
+              className="nike-pill min-w-0 flex-1 border-0 bg-white px-4 py-2.5 text-[14px] font-medium text-[#111111] outline-none placeholder:text-[#9e9ea0]"
             />
             <button
               type="submit"
               disabled={busy || !textDraft.trim()}
-              className="rounded-full bg-[#f3efe6] px-4 py-2.5 text-sm font-medium text-[#132019] disabled:opacity-40"
+              className="nike-pill nike-pill-primary nike-tap px-5 py-2.5 text-[14px] disabled:opacity-40"
             >
               发送
             </button>

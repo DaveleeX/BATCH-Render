@@ -290,27 +290,29 @@ export function CameraView({
         }}
       />
 
-      {/* 轻遮罩，避免把画面盖死 */}
+      {/* Editorial vignette — photography-first, not decorative chrome */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-black/35 via-transparent to-black/45"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(17,17,17,0.55)_0%,transparent_28%,transparent_62%,rgba(17,17,17,0.72)_100%)]"
       />
 
       {showGate ? (
-        <div className="absolute inset-x-5 top-[34%] z-10 -translate-y-1/2 text-center">
-          <p className="font-[family-name:var(--font-display)] text-5xl text-[#f6fff9]">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center">
+          <p className="nike-display text-[72px] text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.65)] sm:text-[88px]">
             览界
           </p>
-          <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#d5efe4]">
+          <p className="mx-auto mt-4 max-w-[18rem] text-[15px] font-medium leading-snug text-white/90">
             {status === "starting"
-              ? "正在打开摄像头…"
+              ? "Opening camera…"
               : status === "no_frames"
-                ? "权限已开启，但还没刷出画面"
-                : "先开启摄像头，再按住说话提问"}
+                ? "权限已开，画面未就绪"
+                : "启用摄像头，按住说话提问"}
           </p>
-          <p className="mt-2 text-[11px] text-[#9ad9c3]/80">{debug}</p>
+          <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-white/50">
+            {debug}
+          </p>
           {error ? (
-            <p className="mx-auto mt-3 max-w-sm rounded-2xl bg-[#f3efe6] px-4 py-3 text-sm text-[#132019]">
+            <p className="mx-auto mt-4 max-w-sm bg-white px-4 py-3 text-[13px] font-medium leading-snug text-[#111111]">
               {error}
             </p>
           ) : null}
@@ -318,19 +320,19 @@ export function CameraView({
             type="button"
             onClick={() => void startCamera()}
             disabled={status === "starting"}
-            className="mt-5 rounded-full bg-[#1ec8a0] px-6 py-3 text-sm font-semibold text-[#07140f] disabled:opacity-60"
+            className="nike-pill nike-pill-on-image nike-tap mt-6 px-8 py-3 text-[15px] disabled:opacity-60"
           >
             {status === "starting"
               ? "开启中…"
               : status === "no_frames"
                 ? "重试摄像头"
-                : "点击开启摄像头"}
+                : "ENABLE CAMERA"}
           </button>
         </div>
       ) : null}
 
       {status === "live" ? (
-        <p className="pointer-events-none absolute left-4 top-[max(5.5rem,env(safe-area-inset-top))] z-[5] rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-[#b9ebda]">
+        <p className="pointer-events-none absolute left-4 top-[max(5.5rem,env(safe-area-inset-top))] z-[5] nike-pill bg-black/50 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white/80">
           {debug}
         </p>
       ) : null}

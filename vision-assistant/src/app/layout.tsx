@@ -12,7 +12,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#0b1210",
+  themeColor: "#111111",
   viewportFit: "cover",
 };
 
@@ -23,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className="h-full">
-      <body className="lanjie-body min-h-full text-[#f3f7f4] antialiased">
+      <body className="lanjie-body min-h-full bg-[#111111] text-white antialiased">
         {children}
       </body>
     </html>
