@@ -7,6 +7,10 @@ type Props = {
   facingMode?: "user" | "environment";
   /** 外部强制重启（切换镜头/手动重试） */
   restartSignal?: number;
+  /** parent increments after permission grant to auto-open camera */
+  bootSignal?: number;
+  /** hide the in-view enable gate when parent shows a global permission sheet */
+  suppressGate?: boolean;
 };
 
 type CamStatus = "idle" | "starting" | "live" | "no_frames";
@@ -30,6 +34,8 @@ export function CameraView({
   onReady,
   facingMode = "environment",
   restartSignal = 0,
+  bootSignal = 0,
+  suppressGate = false,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -241,6 +247,13 @@ export function CameraView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode, restartSignal]);
 
+  // Parent finished permission gate → open camera
+  useEffect(() => {
+    if (!bootSignal) return;
+    void startCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootSignal]);
+
   useEffect(() => {
     return () => {
       startGenRef.current += 1;
@@ -296,7 +309,7 @@ export function CameraView({
         className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(14,15,12,0.55)_0%,transparent_30%,transparent_58%,rgba(14,15,12,0.78)_100%)]"
       />
 
-      {showGate ? (
+      {showGate && !suppressGate ? (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center">
           <p className="wise-display text-[64px] text-[var(--primary)] drop-shadow-[0_4px_24px_rgba(0,0,0,0.45)] sm:text-[76px]">
             览界

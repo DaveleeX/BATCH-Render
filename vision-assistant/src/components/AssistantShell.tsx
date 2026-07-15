@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { CameraView, captureFrame } from "@/components/CameraView";
-import { TalkButton } from "@/components/TalkButton";
+import {
+  UnifiedActionButton,
+  type ActionMode,
+} from "@/components/UnifiedActionButton";
 import { ChatOverlay } from "@/components/ChatOverlay";
 import { TrackOverlay, type TrackOverlayHandle } from "@/components/TrackOverlay";
 import {
@@ -12,6 +15,7 @@ import {
   trackBoxStep,
   type PatchStateHandle,
 } from "@/lib/tracker";
+import { requestAllPermissions } from "@/lib/permissions";
 import type { ChatMessage, GeoPoint, MallInfo, PoiResult, ScreenTarget } from "@/lib/types";
 
 type SpeechResultList = {
@@ -125,6 +129,10 @@ export function AssistantShell() {
   const [provider, setProvider] = useState("demo");
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [camRestart, setCamRestart] = useState(0);
+  const [camBoot, setCamBoot] = useState(0);
+  const [permReady, setPermReady] = useState(false);
+  const [permBusy, setPermBusy] = useState(false);
+  const [actionMode, setActionMode] = useState<ActionMode>("voice");
   const [trackingActive, setTrackingActive] = useState(false);
   const targetsRef = useRef<ScreenTarget[]>([]);
   const patchesRef = useRef<Map<string, PatchStateHandle>>(new Map());
@@ -361,23 +369,31 @@ export function AssistantShell() {
         setProvider(String(d.provider || "demo"));
       })
       .catch(() => setMode("demo"));
-
-    if (!navigator.geolocation) {
-      setStatus("定位不可用，附近推荐会受影响");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGeo({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-        });
-      },
-      () => setStatus("请允许定位，以便推荐 50 米内地点"),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
   }, []);
+
+  const bootstrapPermissions = useCallback(async () => {
+    if (permBusy || permReady) return;
+    setPermBusy(true);
+    setStatus("正在申请相机 / 麦克风 / 定位…");
+    try {
+      const snap = await requestAllPermissions();
+      if (snap.geo) setGeo(snap.geo);
+      else if (!snap.geolocation) {
+        setStatus("定位未授权，附近商场会受影响");
+      }
+      if (!snap.camera) {
+        setStatus("相机未授权，请在浏览器设置中允许");
+      } else if (!snap.microphone) {
+        setStatus("麦克风未授权，可改用文字模式");
+      } else {
+        setStatus("按住说话 · 长按按钮切换 语音/文字/视频");
+      }
+      setPermReady(true);
+      setCamBoot((n) => n + 1);
+    } finally {
+      setPermBusy(false);
+    }
+  }, [permBusy, permReady]);
 
   const onReady = useCallback((video: HTMLVideoElement) => {
     videoRef.current = video;
@@ -619,9 +635,35 @@ export function AssistantShell() {
         facingMode={facing}
         onReady={onReady}
         restartSignal={camRestart}
+        bootSignal={camBoot}
+        suppressGate={!permReady}
       />
 
       <TrackOverlay ref={overlayRef} mirrored={facing === "user"} />
+
+      {!permReady ? (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[var(--ink)] px-6 text-center">
+          <p className="wise-display text-[64px] text-[var(--primary)] sm:text-[76px]">
+            览界
+          </p>
+          <p className="mx-auto mt-4 max-w-xs text-[15px] font-medium leading-snug text-white/90">
+            开始前将一次性申请相机、麦克风与定位权限
+          </p>
+          <ul className="mt-5 space-y-1.5 text-left text-[13px] font-medium text-white/75">
+            <li>· 相机：看你眼前的画面</li>
+            <li>· 麦克风：按住说话提问</li>
+            <li>· 定位：找附近商场与品牌</li>
+          </ul>
+          <button
+            type="button"
+            disabled={permBusy}
+            onClick={() => void bootstrapPermissions()}
+            className="wise-btn wise-btn-primary wise-tap mt-8 px-10 py-3.5 text-[15px] disabled:opacity-60"
+          >
+            {permBusy ? "授权中…" : "开始并授权全部权限"}
+          </button>
+        </div>
+      ) : null}
 
       <header className="absolute inset-x-0 top-0 z-40 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3">
@@ -658,8 +700,8 @@ export function AssistantShell() {
         </div>
       </header>
 
-      {/* Middle band: always between header and bottom chrome — never under controls */}
-      <div className="pointer-events-none absolute inset-x-0 top-[4.75rem] bottom-[10.75rem] z-20 px-4 sm:bottom-[11.25rem]">
+      {/* Middle band — leave room for compact unified control */}
+      <div className="pointer-events-none absolute inset-x-0 top-[4.75rem] bottom-[8.5rem] z-20 px-4 sm:bottom-[9rem]">
         <div className="mx-auto h-full max-w-md pb-1 pt-[max(0.25rem,env(safe-area-inset-top))]">
           <ChatOverlay
             messages={messages}
@@ -671,76 +713,57 @@ export function AssistantShell() {
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
-        <div className="mx-auto max-w-md">
-            <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                className="wise-chip wise-tap bg-[var(--canvas)]/95 px-2.5 py-1.5 text-[10px] text-[var(--ink)]"
-                onClick={() =>
-                  setFacing((f) => (f === "environment" ? "user" : "environment"))
-                }
-              >
-                切换镜头
-              </button>
-              <button
-                type="button"
-                className="wise-chip wise-tap bg-[var(--canvas-soft)]/95 px-2.5 py-1.5 text-[10px] text-[var(--ink)]"
-                onClick={() => setCamRestart((n) => n + 1)}
-              >
-                重试
-              </button>
-              {mall
-                ? ["星巴克在哪", "优衣库在几楼", "喜茶在哪"].map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      disabled={busy}
-                      className="wise-chip wise-tap bg-[var(--primary)] px-2.5 py-1.5 text-[10px] text-[var(--ink)] disabled:opacity-40"
-                      onClick={() => void ask(q)}
-                    >
-                      {q.replace(/在哪|在几楼/g, "")}
-                    </button>
-                  ))
-                : null}
+        <div className="mx-auto max-w-md space-y-2">
+          {mall && actionMode === "voice" ? (
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {["星巴克在哪", "优衣库在几楼", "喜茶在哪"].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  disabled={busy}
+                  className="wise-chip wise-tap bg-[var(--primary)] px-2.5 py-1.5 text-[10px] text-[var(--ink)] disabled:opacity-40"
+                  onClick={() => void ask(q)}
+                >
+                  {q.replace(/在哪|在几楼/g, "")}
+                </button>
+              ))}
             </div>
-            <p className="text-[10px] font-medium text-white/65">
-              {geo
-                ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`
-                : "定位中…"}
-            </p>
-          </div>
+          ) : null}
 
-          <TalkButton
-            disabled={busy}
+          <UnifiedActionButton
+            disabled={busy || !permReady}
             listening={listening}
-            onHoldStart={onHoldStart}
-            onHoldEnd={onHoldEnd}
-          />
-
-          <form
-            className="mt-2 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
+            mode={actionMode}
+            onModeChange={(m) => {
+              setActionMode(m);
+              if (m === "voice") setStatus("按住说话 · 长按切换模式");
+              if (m === "text") setStatus("文字模式 · 输入后发送");
+              if (m === "video") setStatus("视频模式 · 点按切换镜头");
+            }}
+            onVoiceStart={onHoldStart}
+            onVoiceEnd={onHoldEnd}
+            text={textDraft}
+            onTextChange={setTextDraft}
+            onTextSubmit={() => {
               const v = textDraft;
               setTextDraft("");
               void ask(v);
             }}
-          >
-            <input
-              value={textDraft}
-              onChange={(e) => setTextDraft(e.target.value)}
-              placeholder="打字提问…"
-              className="min-w-0 flex-1 rounded-[var(--radius-md)] border-2 border-[var(--ink)] bg-[var(--canvas)] px-4 py-2.5 text-[13px] font-medium text-[var(--ink)] outline-none placeholder:text-[var(--mute)]"
-            />
-            <button
-              type="submit"
-              disabled={busy || !textDraft.trim()}
-              className="wise-btn wise-btn-primary wise-tap px-4 py-2.5 text-[13px] disabled:opacity-40"
-            >
-              发送
-            </button>
-          </form>
+            onVideoPrimary={() => {
+              setFacing((f) => (f === "environment" ? "user" : "environment"));
+            }}
+            videoHint={
+              facing === "environment" ? "点按切到前置" : "点按切到后置"
+            }
+          />
+
+          <p className="text-center text-[10px] font-medium text-white/55">
+            {geo
+              ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`
+              : permReady
+                ? "定位中…"
+                : ""}
+          </p>
         </div>
       </div>
     </main>
