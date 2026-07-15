@@ -173,7 +173,7 @@ export function AssistantShell() {
     setMessages((prev) => [...prev, userMsg]);
 
     const imageDataUrl = videoRef.current
-      ? captureFrame(videoRef.current)
+      ? captureFrame(videoRef.current, 1600, 0.92)
       : undefined;
 
     // 只用当前轮之前的历史，避免把本轮用户句再塞一遍

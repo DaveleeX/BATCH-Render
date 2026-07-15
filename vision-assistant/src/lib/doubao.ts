@@ -67,6 +67,8 @@ export async function doubaoRespond(params: {
   imageDataUrl?: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   maxOutputTokens?: number;
+  /** 品牌/物体识别时可开 thinking，提升准确度 */
+  enableThinking?: boolean;
 }): Promise<string> {
   const apiKey = arkKey();
   if (!apiKey) throw new Error("missing_ark_api_key");
@@ -94,6 +96,7 @@ export async function doubaoRespond(params: {
   userContent.push({ type: "input_text", text: params.prompt });
   input.push({ role: "user", content: userContent });
 
+  const enableThinking = Boolean(params.enableThinking);
   const res = await fetch(`${arkBase()}/responses`, {
     method: "POST",
     headers: {
@@ -103,9 +106,8 @@ export async function doubaoRespond(params: {
     body: JSON.stringify({
       model: getDoubaoModelId(),
       input,
-      max_output_tokens: params.maxOutputTokens ?? 400,
-      // Seed 默认会把额度耗在 reasoning 上，导致正式回复为空
-      thinking: { type: "disabled" },
+      max_output_tokens: params.maxOutputTokens ?? (enableThinking ? 1600 : 400),
+      thinking: { type: enableThinking ? "enabled" : "disabled" },
     }),
   });
 

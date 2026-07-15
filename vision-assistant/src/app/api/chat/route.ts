@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     } satisfies ChatResponseBody);
   }
 
-  const history = (body.history || []).slice(-6);
+  const history = (body.history || []).slice(-4);
   const poiHint = pois.length
     ? pois
         .slice(0, 3)
@@ -131,7 +131,22 @@ export async function POST(req: Request) {
         .join("；")
     : "无";
 
-  const system = `你是「览界」眼镜助手（手机 Demo）。像面对面说话：短、准、不啰嗦。
+  const isVisionId =
+    intent.wantWhat ||
+    /品牌|什么店|哪家|库迪|瑞幸|星巴克|咖啡|logo|标志|这是什么|看一下/.test(
+      text,
+    );
+
+  const system = isVisionId
+    ? `你是「览界」视觉助手。任务：根据摄像头画面准确识别物体/品牌。
+硬规则：
+1. 先尽量读出包装、杯套、瓶标上的中英文印刷文字和 logo，再下结论。
+2. 不要只凭颜色猜测。红色咖啡纸杯在中国很常见，可能是库迪(Cotti，常见@形标志)、瑞幸、星巴克或其他品牌。
+3. 若能看见 Cotti / 库迪 / @ 形标志，优先判为库迪咖啡。
+4. 看不清就说「杯套文字看不清，请对准 logo 再拍」，不要硬猜错品牌。
+5. 最终只用 1-2 句中文回答，先说品牌名，再说依据（看见了什么字/标志）。
+地理：${body.geo ? `${body.geo.lat.toFixed(5)}, ${body.geo.lng.toFixed(5)}` : "未知"}`
+    : `你是「览界」眼镜助手（手机 Demo）。像面对面说话：短、准、不啰嗦。
 硬规则：
 1. 中文，默认 1-2 句，最多 60 字；附近地点最多列 3 条。
 2. 禁止复读用户原话，禁止套话开场。
@@ -141,12 +156,20 @@ export async function POST(req: Request) {
 附近候选：${poiHint}
 已匹配人物：${peopleHint}`;
 
+  const prompt = isVisionId
+    ? `${text}
+
+请仔细看图：优先识别杯套/杯身/包装上的品牌文字与 logo，再回答。`
+    : text;
+
   try {
     let reply = await generateAssistantReply({
       system,
-      text,
+      text: prompt,
       imageDataUrl: body.imageDataUrl,
-      history,
+      // 品牌识别少带历史，避免被上一句错误答案带偏
+      history: isVisionId ? [] : history,
+      enableThinking: Boolean(isVisionId && body.imageDataUrl),
     });
     reply = reply.replace(/（[^）]*演示[^）]*）/g, "").trim();
     if (!reply) {

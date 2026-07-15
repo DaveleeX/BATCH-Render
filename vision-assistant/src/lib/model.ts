@@ -173,6 +173,7 @@ export async function generateAssistantReply(params: {
   text: string;
   imageDataUrl?: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
+  enableThinking?: boolean;
 }): Promise<string> {
   const resolved = resolveVisionModel();
   if (!resolved) throw new Error("no_model");
@@ -183,7 +184,8 @@ export async function generateAssistantReply(params: {
       prompt: params.text,
       imageDataUrl: params.imageDataUrl,
       history: params.history,
-      maxOutputTokens: 320,
+      enableThinking: params.enableThinking,
+      maxOutputTokens: params.enableThinking ? 1800 : 360,
     });
   }
 
@@ -193,7 +195,7 @@ export async function generateAssistantReply(params: {
   const result = await generateText({
     model,
     system: params.system,
-    temperature: 0.4,
+    temperature: params.enableThinking ? 0.2 : 0.4,
     messages: [
       ...(params.history || []).map((m) => ({
         role: m.role,
@@ -209,7 +211,7 @@ export async function generateAssistantReply(params: {
         ],
       },
     ],
-    maxOutputTokens: 220,
+    maxOutputTokens: params.enableThinking ? 500 : 220,
   });
   return result.text.trim();
 }

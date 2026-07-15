@@ -129,8 +129,23 @@ export function CameraView({
       const facing = facingRef.current;
       // iOS 对约束很敏感：优先极简约束，再回退
       const attempts: MediaStreamConstraints[] = [
+        {
+          audio: false,
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+        },
+        {
+          audio: false,
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
         { audio: false, video: { facingMode: facing } },
-        { audio: false, video: { facingMode: { ideal: facing } } },
         { audio: false, video: true },
       ];
 
@@ -325,7 +340,8 @@ export function CameraView({
 
 export function captureFrame(
   video: HTMLVideoElement,
-  maxWidth = 960,
+  maxWidth = 1600,
+  quality = 0.92,
 ): string | null {
   if (!video.videoWidth || !video.videoHeight) return null;
   const scale = Math.min(1, maxWidth / video.videoWidth);
@@ -336,6 +352,9 @@ export function captureFrame(
   canvas.height = h;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
+  // 提升锐度，利于读 logo / 杯套文字
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(video, 0, 0, w, h);
-  return canvas.toDataURL("image/jpeg", 0.72);
+  return canvas.toDataURL("image/jpeg", quality);
 }
