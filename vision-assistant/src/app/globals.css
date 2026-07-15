@@ -1,36 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  /* Nike chrome — DESIGN.md */
-  --ink: #111111;
-  --on-primary: #ffffff;
+  /* Wise — DESIGN.md */
+  --primary: #9fe870;
+  --on-primary: #0e0f0c;
+  --primary-active: #cdffad;
+  --primary-neutral: #c5edab;
+  --primary-pale: #e2f6d5;
+  --ink: #0e0f0c;
+  --ink-deep: #163300;
+  --body: #454745;
+  --mute: #868685;
   --canvas: #ffffff;
-  --soft-cloud: #f5f5f5;
-  --charcoal: #39393b;
-  --mute: #707072;
-  --stone: #9e9ea0;
-  --hairline: #cacacb;
-  --hairline-soft: #e5e5e5;
-  --sale: #d30005;
-  --success: #007d48;
+  --canvas-soft: #e8ebe6;
+  --positive: #2ead4b;
+  --positive-deep: #054d28;
+  --negative: #d03238;
 
-  --background: #111111;
-  --foreground: #ffffff;
+  --background: var(--ink);
+  --foreground: var(--canvas);
 
-  /* Futura/Helvetica substitutes — no Google CDN (China-friendly) */
-  --font-display: "Arial Narrow", "PingFang SC", "Helvetica Neue", Helvetica,
-    Arial, sans-serif;
-  --font-sans: Helvetica, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", Arial, sans-serif;
+  /* China-friendly substitutes (no Google CDN) */
+  --font-display: "Arial Black", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", system-ui, sans-serif;
+  --font-sans: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+
+  --radius-md: 12px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
   --color-ink: var(--ink);
   --color-canvas: var(--canvas);
-  --color-soft-cloud: var(--soft-cloud);
+  --color-canvas-soft: var(--canvas-soft);
   --color-mute: var(--mute);
+  --color-body: var(--body);
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
 }
@@ -44,53 +53,80 @@ body {
   margin: 0;
   min-height: 100%;
   background: var(--ink);
-  color: var(--on-primary);
+  color: var(--canvas);
 }
 
 .lanjie-body {
   font-family: var(--font-sans);
   font-weight: 400;
   letter-spacing: 0;
+  font-feature-settings: "calt";
 }
 
-.nike-display {
+.wise-display {
   font-family: var(--font-display);
-  font-weight: 500;
-  text-transform: uppercase;
+  font-weight: 900;
   line-height: 0.9;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
 }
 
-.nike-pill {
-  border-radius: 30px;
+.wise-btn {
+  border-radius: var(--radius-xl);
   font-family: var(--font-sans);
-  font-weight: 500;
-  font-size: 16px;
-  line-height: 1.5;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.4;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease,
+    opacity 0.15s ease;
 }
 
-.nike-pill-primary {
-  background: var(--ink);
+.wise-btn-primary {
+  background: var(--primary);
   color: var(--on-primary);
 }
 
-.nike-pill-on-image {
+.wise-btn-primary:active {
+  background: var(--primary-active);
+}
+
+.wise-btn-secondary {
+  background: var(--canvas-soft);
+  color: var(--ink);
+}
+
+.wise-btn-surface {
   background: var(--canvas);
   color: var(--ink);
 }
 
-.nike-pill-secondary {
-  background: var(--soft-cloud);
-  color: var(--ink);
+.wise-btn-ink {
+  background: var(--ink);
+  color: var(--primary);
 }
 
-.nike-tap:active {
-  transform: scale(0.96);
-  opacity: 0.85;
+.wise-chip {
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.wise-card {
+  background: var(--canvas);
+  color: var(--ink);
+  border-radius: var(--radius-xl);
+}
+
+.wise-tap:active {
+  transform: scale(0.97);
+  opacity: 0.9;
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -110,5 +146,5 @@ input {
 }
 
 .track-pulse > span:last-child {
-  animation: track-pulse-ring 1.4s ease-out infinite;
+  animation: track-pulse-ring 1.6s ease-out infinite;
 }

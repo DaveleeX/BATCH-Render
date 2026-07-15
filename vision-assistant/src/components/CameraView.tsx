@@ -290,29 +290,27 @@ export function CameraView({
         }}
       />
 
-      {/* Editorial vignette — photography-first, not decorative chrome */}
+      {/* Soft ink vignette for Readable Wise chrome on camera */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(17,17,17,0.55)_0%,transparent_28%,transparent_62%,rgba(17,17,17,0.72)_100%)]"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(14,15,12,0.55)_0%,transparent_30%,transparent_58%,rgba(14,15,12,0.78)_100%)]"
       />
 
       {showGate ? (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center">
-          <p className="nike-display text-[64px] text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.65)] sm:text-[76px]">
+          <p className="wise-display text-[64px] text-[var(--primary)] drop-shadow-[0_4px_24px_rgba(0,0,0,0.45)] sm:text-[76px]">
             览界
           </p>
           <p className="mx-auto mt-4 max-w-[18rem] text-[15px] font-medium leading-snug text-white/90">
             {status === "starting"
-              ? "Opening camera…"
+              ? "正在打开摄像头…"
               : status === "no_frames"
                 ? "权限已开，画面未就绪"
                 : "启用摄像头，按住说话提问"}
           </p>
-          <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-white/50">
-            {debug}
-          </p>
+          <p className="mt-2 text-[11px] font-medium text-white/50">{debug}</p>
           {error ? (
-            <p className="mx-auto mt-4 max-w-sm bg-white px-4 py-3 text-[13px] font-medium leading-snug text-[#111111]">
+            <p className="wise-card mx-auto mt-4 max-w-sm px-4 py-3 text-[13px] font-medium leading-snug text-[var(--ink)]">
               {error}
             </p>
           ) : null}
@@ -320,19 +318,19 @@ export function CameraView({
             type="button"
             onClick={() => void startCamera()}
             disabled={status === "starting"}
-            className="nike-pill nike-pill-on-image nike-tap mt-6 px-8 py-3 text-[15px] disabled:opacity-60"
+            className="wise-btn wise-btn-primary wise-tap mt-6 px-8 py-3.5 text-[15px] disabled:opacity-60"
           >
             {status === "starting"
               ? "开启中…"
               : status === "no_frames"
                 ? "重试摄像头"
-                : "ENABLE CAMERA"}
+                : "开启摄像头"}
           </button>
         </div>
       ) : null}
 
       {status === "live" ? (
-        <p className="pointer-events-none absolute right-4 top-[max(4.25rem,env(safe-area-inset-top))] z-[5] nike-pill bg-black/45 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white/70">
+        <p className="pointer-events-none absolute right-4 top-[max(4.25rem,env(safe-area-inset-top))] z-[5] wise-chip bg-[var(--ink)]/70 px-2.5 py-1 text-[9px] text-[var(--primary)]">
           {debug}
         </p>
       ) : null}

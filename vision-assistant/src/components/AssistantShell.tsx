@@ -557,7 +557,7 @@ export function AssistantShell() {
   }, [ask]);
 
   return (
-    <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#111111] text-white">
+    <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[var(--ink)] text-white">
       <CameraView
         facingMode={facing}
         onReady={onReady}
@@ -569,11 +569,11 @@ export function AssistantShell() {
       <header className="absolute inset-x-0 top-0 z-40 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="nike-display text-[28px] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
+            <p className="wise-display text-[30px] text-[var(--primary)] drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]">
               览界
             </p>
-            <p className="mt-0.5 truncate text-[10px] font-medium tracking-wide text-white/80">
-              SEE MORE. ASK ANYTHING.
+            <p className="mt-0.5 truncate text-[11px] font-semibold text-white/85">
+              看见，并告诉你答案
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -581,17 +581,17 @@ export function AssistantShell() {
               <button
                 type="button"
                 onClick={clearTargets}
-                className="nike-pill nike-tap bg-white/90 px-2.5 py-1 text-[10px] font-medium text-[#111111]"
+                className="wise-chip wise-tap bg-[var(--canvas)] px-2.5 py-1.5 text-[10px] text-[var(--ink)]"
               >
                 清除定位
               </button>
             ) : null}
-            <span className="nike-pill bg-white px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-[#111111]">
+            <span className="wise-chip bg-[var(--primary-pale)] px-2.5 py-1.5 text-[10px] text-[var(--ink-deep)]">
               {mode === "live" ? provider : "demo"}
             </span>
             <Link
               href="/profile"
-              className="nike-pill nike-pill-on-image nike-tap px-3 py-1.5 text-[11px] font-medium"
+              className="wise-btn wise-btn-primary wise-tap px-3.5 py-2 text-[12px]"
             >
               我的身份
             </Link>
@@ -612,7 +612,7 @@ export function AssistantShell() {
             <div className="flex gap-1.5">
               <button
                 type="button"
-                className="nike-pill nike-tap bg-white/95 px-2.5 py-1 text-[10px] font-medium text-[#111111]"
+                className="wise-chip wise-tap bg-[var(--canvas)]/95 px-2.5 py-1.5 text-[10px] text-[var(--ink)]"
                 onClick={() =>
                   setFacing((f) => (f === "environment" ? "user" : "environment"))
                 }
@@ -621,7 +621,7 @@ export function AssistantShell() {
               </button>
               <button
                 type="button"
-                className="nike-pill nike-tap bg-[#f5f5f5]/95 px-2.5 py-1 text-[10px] font-medium text-[#111111]"
+                className="wise-chip wise-tap bg-[var(--canvas-soft)]/95 px-2.5 py-1.5 text-[10px] text-[var(--ink)]"
                 onClick={() => setCamRestart((n) => n + 1)}
               >
                 重试
@@ -654,12 +654,12 @@ export function AssistantShell() {
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
               placeholder="打字提问…"
-              className="nike-pill min-w-0 flex-1 border-0 bg-white px-4 py-2 text-[13px] font-medium text-[#111111] outline-none placeholder:text-[#9e9ea0]"
+              className="min-w-0 flex-1 rounded-[var(--radius-md)] border-2 border-[var(--ink)] bg-[var(--canvas)] px-4 py-2.5 text-[13px] font-medium text-[var(--ink)] outline-none placeholder:text-[var(--mute)]"
             />
             <button
               type="submit"
               disabled={busy || !textDraft.trim()}
-              className="nike-pill nike-pill-primary nike-tap px-4 py-2 text-[13px] disabled:opacity-40"
+              className="wise-btn wise-btn-primary wise-tap px-4 py-2.5 text-[13px] disabled:opacity-40"
             >
               发送
             </button>

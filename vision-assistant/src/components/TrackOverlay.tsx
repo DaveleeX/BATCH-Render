@@ -65,10 +65,10 @@ export const TrackOverlay = forwardRef<TrackOverlayHandle, Props>(
           box.dataset.box = "1";
           box.className = "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
           box.innerHTML = `
-            <span class="absolute left-0 top-0 h-3.5 w-3.5 border-l-2 border-t-2 border-white drop-shadow"></span>
-            <span class="absolute right-0 top-0 h-3.5 w-3.5 border-r-2 border-t-2 border-white drop-shadow"></span>
-            <span class="absolute bottom-0 left-0 h-3.5 w-3.5 border-b-2 border-l-2 border-white drop-shadow"></span>
-            <span class="absolute bottom-0 right-0 h-3.5 w-3.5 border-b-2 border-r-2 border-white drop-shadow"></span>
+            <span class="absolute left-0 top-0 h-3.5 w-3.5 border-l-2 border-t-2 border-[#9fe870] drop-shadow"></span>
+            <span class="absolute right-0 top-0 h-3.5 w-3.5 border-r-2 border-t-2 border-[#9fe870] drop-shadow"></span>
+            <span class="absolute bottom-0 left-0 h-3.5 w-3.5 border-b-2 border-l-2 border-[#9fe870] drop-shadow"></span>
+            <span class="absolute bottom-0 right-0 h-3.5 w-3.5 border-b-2 border-r-2 border-[#9fe870] drop-shadow"></span>
           `;
 
           const pin = document.createElement("div");
@@ -76,10 +76,10 @@ export const TrackOverlay = forwardRef<TrackOverlayHandle, Props>(
             "relative flex flex-col items-center pointer-events-none";
           pin.innerHTML = `
             <span class="track-pulse relative flex size-2.5 items-center justify-center">
-              <span class="absolute size-2.5 rounded-full bg-white"></span>
-              <span class="absolute size-6 rounded-full border border-white/70"></span>
+              <span class="absolute size-2.5 rounded-full bg-[#9fe870]"></span>
+              <span class="absolute size-6 rounded-full border border-[#9fe870]/80"></span>
             </span>
-            <span class="mt-1.5 max-w-[8rem] truncate bg-[#111111] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white shadow-[0_4px_12px_rgba(0,0,0,0.35)]">${t.label.replace(/[<>&]/g, "")}</span>
+            <span class="mt-1.5 max-w-[8rem] truncate rounded-full bg-[#0e0f0c] px-2.5 py-1 text-[10px] font-semibold text-[#9fe870] shadow-[0_4px_12px_rgba(0,0,0,0.35)]">${t.label.replace(/[<>&]/g, "")}</span>
           `;
 
           wrap.appendChild(box);

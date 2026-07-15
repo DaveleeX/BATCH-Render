@@ -107,25 +107,25 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-[#f5f5f5] text-[#111111]">
+    <main className="min-h-[100dvh] bg-[var(--canvas-soft)] text-[var(--ink)]">
       <div className="mx-auto max-w-md space-y-8 px-4 py-8 pb-16">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="nike-display text-[48px] text-[#111111]">身份</p>
-            <p className="mt-2 max-w-[16rem] text-[13px] font-medium leading-snug text-[#707072]">
+            <p className="wise-display text-[48px] text-[var(--ink)]">身份</p>
+            <p className="mt-2 max-w-[16rem] text-[13px] leading-snug text-[var(--body)]">
               仅在开启「可被发现」后，他人才能通过画面问出你是谁。
             </p>
           </div>
           <Link
             href="/"
-            className="nike-pill nike-pill-primary nike-tap shrink-0 px-4 py-2 text-[12px]"
+            className="wise-btn wise-btn-ink wise-tap shrink-0 px-4 py-2 text-[12px]"
           >
             返回
           </Link>
         </div>
 
         <section className="space-y-3">
-          <div className="overflow-hidden bg-[#111111]">
+          <div className="overflow-hidden rounded-[var(--radius-xl)] bg-[var(--ink)]">
             <video
               ref={videoRef}
               playsInline
@@ -136,7 +136,7 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={captureSelfie}
-            className="nike-pill nike-pill-primary nike-tap w-full py-3.5 text-[15px]"
+            className="wise-btn wise-btn-primary wise-tap w-full py-3.5 text-[15px]"
           >
             拍摄脸部照片
           </button>
@@ -145,45 +145,45 @@ export default function ProfilePage() {
             <img
               src={faceImageDataUrl}
               alt="自拍预览"
-              className="mx-auto h-24 w-24 rounded-full object-cover"
+              className="mx-auto h-24 w-24 rounded-full object-cover ring-4 ring-[var(--primary)]"
             />
           ) : null}
         </section>
 
-        <section className="space-y-4 bg-white p-5">
-          <label className="block space-y-1.5 text-[13px] font-medium text-[#39393b]">
+        <section className="wise-card space-y-4 p-5 shadow-[0_8px_24px_rgba(14,15,12,0.06)]">
+          <label className="block space-y-1.5 text-[13px] font-semibold text-[var(--body)]">
             <span>昵称 / 本名</span>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full border-0 border-b border-[#e5e5e5] bg-transparent py-2 text-[15px] text-[#111111] outline-none placeholder:text-[#9e9ea0]"
+              className="w-full rounded-[var(--radius-md)] border-2 border-[var(--ink)] bg-[var(--canvas)] px-3 py-2.5 text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--mute)]"
               placeholder="例如：李明"
             />
           </label>
-          <label className="block space-y-1.5 text-[13px] font-medium text-[#39393b]">
+          <label className="block space-y-1.5 text-[13px] font-semibold text-[var(--body)]">
             <span>职业</span>
             <input
               value={occupation}
               onChange={(e) => setOccupation(e.target.value)}
-              className="w-full border-0 border-b border-[#e5e5e5] bg-transparent py-2 text-[15px] text-[#111111] outline-none placeholder:text-[#9e9ea0]"
+              className="w-full rounded-[var(--radius-md)] border-2 border-[var(--ink)] bg-[var(--canvas)] px-3 py-2.5 text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--mute)]"
               placeholder="例如：产品设计师"
             />
           </label>
-          <label className="block space-y-1.5 text-[13px] font-medium text-[#39393b]">
+          <label className="block space-y-1.5 text-[13px] font-semibold text-[var(--body)]">
             <span>公开简介</span>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              className="min-h-20 w-full resize-none border-0 border-b border-[#e5e5e5] bg-transparent py-2 text-[15px] text-[#111111] outline-none placeholder:text-[#9e9ea0]"
+              className="min-h-20 w-full resize-none rounded-[var(--radius-md)] border-2 border-[var(--ink)] bg-[var(--canvas)] px-3 py-2.5 text-[15px] text-[var(--ink)] outline-none placeholder:text-[var(--mute)]"
               placeholder="一句话介绍，可被语音朗读"
             />
           </label>
-          <label className="flex items-center gap-3 text-[13px] font-medium text-[#111111]">
+          <label className="flex items-center gap-3 text-[13px] font-semibold text-[var(--ink)]">
             <input
               type="checkbox"
               checked={discoverable}
               onChange={(e) => setDiscoverable(e.target.checked)}
-              className="size-4 accent-[#111111]"
+              className="size-4 accent-[var(--primary)]"
             />
             允许他人通过摄像头读取我的公开信息
           </label>
@@ -191,20 +191,22 @@ export default function ProfilePage() {
             type="button"
             disabled={saving}
             onClick={() => void save()}
-            className="nike-pill nike-pill-primary nike-tap w-full py-3.5 text-[15px] disabled:opacity-40"
+            className="wise-btn wise-btn-primary wise-tap w-full py-3.5 text-[15px] disabled:opacity-40"
           >
             {saving ? "保存中…" : "保存身份"}
           </button>
           {message ? (
-            <p className="text-[13px] font-medium leading-relaxed text-[#707072]">
+            <p className="text-[13px] leading-relaxed text-[var(--body)]">
               {message}
             </p>
           ) : null}
         </section>
 
-        <section className="space-y-0 overflow-hidden bg-white">
-          <div className="border-b border-[#e5e5e5] px-5 py-3">
-            <p className="nike-display text-[12px] text-[#111111]">已登记</p>
+        <section className="wise-card overflow-hidden shadow-[0_8px_24px_rgba(14,15,12,0.06)]">
+          <div className="border-b border-[var(--canvas-soft)] bg-[var(--primary-pale)] px-5 py-3">
+            <p className="text-[13px] font-semibold text-[var(--ink-deep)]">
+              已登记
+            </p>
           </div>
           <ul>
             {profiles.map((p, i) => (
@@ -212,24 +214,22 @@ export default function ProfilePage() {
                 key={p.id}
                 className={[
                   "px-5 py-3.5",
-                  i > 0 ? "border-t border-[#e5e5e5]" : "",
+                  i > 0 ? "border-t border-[var(--canvas-soft)]" : "",
                 ].join(" ")}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[15px] font-medium">{p.displayName}</span>
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-[#707072]">
+                  <span className="text-[15px] font-semibold">{p.displayName}</span>
+                  <span className="wise-chip bg-[var(--primary-pale)] px-2 py-0.5 text-[10px] text-[var(--positive-deep)]">
                     {p.discoverable ? "可发现" : "私密"}
                   </span>
                 </div>
-                <p className="mt-1 text-[12px] font-medium text-[#707072]">
+                <p className="mt-1 text-[12px] text-[var(--body)]">
                   {[p.occupation, p.bio].filter(Boolean).join(" · ") || "无简介"}
                 </p>
               </li>
             ))}
             {profiles.length === 0 ? (
-              <li className="px-5 py-4 text-[13px] font-medium text-[#9e9ea0]">
-                暂无登记
-              </li>
+              <li className="px-5 py-4 text-[13px] text-[var(--mute)]">暂无登记</li>
             ) : null}
           </ul>
         </section>
