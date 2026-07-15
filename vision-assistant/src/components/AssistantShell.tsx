@@ -736,9 +736,9 @@ export function AssistantShell() {
             mode={actionMode}
             onModeChange={(m) => {
               setActionMode(m);
-              if (m === "voice") setStatus("按住说话 · 长按切换模式");
-              if (m === "text") setStatus("文字模式 · 输入后发送");
-              if (m === "video") setStatus("视频模式 · 点按切换镜头");
+              if (m === "voice") setStatus("按住说话 · 长按上滑切换模式");
+              if (m === "text") setStatus("文字模式 · 长按上滑可切换");
+              if (m === "video") setStatus("视频模式 · 麦克风提问，右侧切文字");
             }}
             onVoiceStart={onHoldStart}
             onVoiceEnd={onHoldEnd}
@@ -749,12 +749,10 @@ export function AssistantShell() {
               setTextDraft("");
               void ask(v);
             }}
-            onVideoPrimary={() => {
-              setFacing((f) => (f === "environment" ? "user" : "environment"));
+            onEnterVideo={() => {
+              setCamBoot((n) => n + 1);
+              setStatus("视频已就绪 · 按住麦克风说话");
             }}
-            videoHint={
-              facing === "environment" ? "点按切到前置" : "点按切到后置"
-            }
           />
 
           <p className="text-center text-[10px] font-medium text-white/55">
