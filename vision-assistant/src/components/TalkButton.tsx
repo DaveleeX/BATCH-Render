@@ -57,15 +57,15 @@ export function TalkButton({
       disabled={disabled}
       aria-pressed={pressed}
       className={[
-        "nike-pill nike-pill-primary nike-tap relative mx-auto flex h-12 w-full max-w-xs touch-none items-center justify-center",
-        "px-8 select-none [-webkit-user-select:none]",
+        "nike-pill nike-pill-primary nike-tap relative mx-auto flex h-11 w-full max-w-sm touch-none items-center justify-center",
+        "px-6 select-none [-webkit-user-select:none]",
         "disabled:cursor-not-allowed disabled:opacity-40",
         pressed ? "scale-[0.97] opacity-90" : "",
       ].join(" ")}
       onPointerDown={begin}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <span className="text-[15px] font-medium tracking-wide">
+      <span className="text-[13px] font-medium tracking-wide">
         {listening ? "LISTENING · 聆听中" : "HOLD TO TALK · 按住说话"}
       </span>
     </button>

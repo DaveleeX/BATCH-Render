@@ -336,23 +336,23 @@ export function AssistantShell() {
         restartSignal={camRestart}
       />
 
-      <header className="absolute inset-x-0 top-0 z-40 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
-        <div className="mx-auto flex max-w-md items-start justify-between gap-3">
-          <div>
-            <p className="nike-display text-[42px] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
+      <header className="absolute inset-x-0 top-0 z-40 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="mx-auto flex max-w-md items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="nike-display text-[28px] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
               览界
             </p>
-            <p className="mt-1 max-w-[13rem] text-[12px] font-medium text-white/85">
+            <p className="mt-0.5 truncate text-[10px] font-medium tracking-wide text-white/80">
               SEE MORE. ASK ANYTHING.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <span className="nike-pill bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-[#111111]">
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="nike-pill bg-white px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-[#111111]">
               {mode === "live" ? provider : "demo"}
             </span>
             <Link
               href="/profile"
-              className="nike-pill nike-pill-on-image nike-tap px-4 py-2 text-[12px] font-medium"
+              className="nike-pill nike-pill-on-image nike-tap px-3 py-1.5 text-[11px] font-medium"
             >
               我的身份
             </Link>
@@ -360,15 +360,20 @@ export function AssistantShell() {
         </div>
       </header>
 
-      <ChatOverlay messages={messages} pois={pois} status={status} />
+      {/* Middle band: always between header and bottom chrome — never under controls */}
+      <div className="pointer-events-none absolute inset-x-0 top-[4.75rem] bottom-[10.75rem] z-20 px-4 sm:bottom-[11.25rem]">
+        <div className="mx-auto h-full max-w-md pb-1 pt-[max(0.25rem,env(safe-area-inset-top))]">
+          <ChatOverlay messages={messages} pois={pois} status={status} />
+        </div>
+      </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-30 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+      <div className="absolute inset-x-0 bottom-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
         <div className="mx-auto max-w-md">
-          <div className="mb-3 flex items-center justify-between gap-2 px-0.5">
-            <div className="flex gap-2">
+          <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+            <div className="flex gap-1.5">
               <button
                 type="button"
-                className="nike-pill nike-tap bg-white/95 px-3 py-1.5 text-[11px] font-medium text-[#111111]"
+                className="nike-pill nike-tap bg-white/95 px-2.5 py-1 text-[10px] font-medium text-[#111111]"
                 onClick={() =>
                   setFacing((f) => (f === "environment" ? "user" : "environment"))
                 }
@@ -377,13 +382,13 @@ export function AssistantShell() {
               </button>
               <button
                 type="button"
-                className="nike-pill nike-tap bg-[#f5f5f5]/95 px-3 py-1.5 text-[11px] font-medium text-[#111111]"
+                className="nike-pill nike-tap bg-[#f5f5f5]/95 px-2.5 py-1 text-[10px] font-medium text-[#111111]"
                 onClick={() => setCamRestart((n) => n + 1)}
               >
-                重试摄像头
+                重试
               </button>
             </div>
-            <p className="text-[11px] font-medium text-white/70">
+            <p className="text-[10px] font-medium text-white/65">
               {geo
                 ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`
                 : "定位中…"}
@@ -398,7 +403,7 @@ export function AssistantShell() {
           />
 
           <form
-            className="mt-3 flex gap-2"
+            className="mt-2 flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               const v = textDraft;
@@ -409,13 +414,13 @@ export function AssistantShell() {
             <input
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
-              placeholder="打字提问：附近热门咖啡馆"
-              className="nike-pill min-w-0 flex-1 border-0 bg-white px-4 py-2.5 text-[14px] font-medium text-[#111111] outline-none placeholder:text-[#9e9ea0]"
+              placeholder="打字提问…"
+              className="nike-pill min-w-0 flex-1 border-0 bg-white px-4 py-2 text-[13px] font-medium text-[#111111] outline-none placeholder:text-[#9e9ea0]"
             />
             <button
               type="submit"
               disabled={busy || !textDraft.trim()}
-              className="nike-pill nike-pill-primary nike-tap px-5 py-2.5 text-[14px] disabled:opacity-40"
+              className="nike-pill nike-pill-primary nike-tap px-4 py-2 text-[13px] disabled:opacity-40"
             >
               发送
             </button>

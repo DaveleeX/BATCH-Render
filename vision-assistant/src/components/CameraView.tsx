@@ -298,7 +298,7 @@ export function CameraView({
 
       {showGate ? (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center">
-          <p className="nike-display text-[72px] text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.65)] sm:text-[88px]">
+          <p className="nike-display text-[64px] text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.65)] sm:text-[76px]">
             览界
           </p>
           <p className="mx-auto mt-4 max-w-[18rem] text-[15px] font-medium leading-snug text-white/90">
@@ -332,7 +332,7 @@ export function CameraView({
       ) : null}
 
       {status === "live" ? (
-        <p className="pointer-events-none absolute left-4 top-[max(5.5rem,env(safe-area-inset-top))] z-[5] nike-pill bg-black/50 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-white/80">
+        <p className="pointer-events-none absolute right-4 top-[max(4.25rem,env(safe-area-inset-top))] z-[5] nike-pill bg-black/45 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white/70">
           {debug}
         </p>
       ) : null}
