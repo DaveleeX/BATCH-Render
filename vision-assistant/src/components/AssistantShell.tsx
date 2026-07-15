@@ -386,7 +386,7 @@ export function AssistantShell() {
       } else if (!snap.microphone) {
         setStatus("麦克风未授权，可改用文字模式");
       } else {
-        setStatus("按住说话 · 上滑切换语音/文字");
+        setStatus("按住说话 · 右侧切换文字");
       }
       setPermReady(true);
       setCamBoot((n) => n + 1);
@@ -736,8 +736,8 @@ export function AssistantShell() {
             mode={actionMode}
             onModeChange={(m) => {
               setActionMode(m);
-              if (m === "voice") setStatus("按住说话 · 上滑切换文字");
-              if (m === "text") setStatus("文字模式 · 上滑可切回语音");
+              if (m === "voice") setStatus("按住说话 · 右侧切文字");
+              if (m === "text") setStatus("文字输入 · 右侧切语音");
             }}
             onVoiceStart={onHoldStart}
             onVoiceEnd={onHoldEnd}
