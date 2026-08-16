@@ -1,0 +1,213 @@
+{
+  "project": {
+    "title": "归零",
+    "subtitle": "ZERO HOUR — 分镜表 / STORYBOARD",
+    "director": "—",
+    "dp": "—",
+    "version": "v1",
+    "date": "2026-08-16",
+    "logline": "凌晨四点，观测掩体里的六个人等待一场他们亲手造出来、却不确定能否停下的爆炸。",
+    "palette": "沙色、石板灰、钨丝灯暖橙；去饱和，阴影保留细节",
+    "stock": "Kodak VISION3 500T 5219（夜/内景）+ 250D 5207（黎明外景）",
+    "notes": "全片球面镜。IMAX 焦距只用 50mm 与 80mm。爆炸为实拍化学爆破，不做数字合成。",
+    "format_policy": [
+      {
+        "aspect": "1.43",
+        "format": "IMAX 15/70",
+        "usage": "主画幅。掩体内的逼视特写、荒原尺度、爆炸段落全部使用"
+      },
+      {
+        "aspect": "2.20",
+        "format": "Panaflex System 65 Studio（5-perf 65mm，隔音罩）",
+        "usage": "同期声对白段落。IMAX 机身噪音过大时使用，同时标记'外部客观视角'"
+      }
+    ]
+  },
+  "sequences": [
+    {
+      "id": "SEQ01",
+      "title": "掩体 — 倒计时最后九十秒",
+      "timeline": "T-90s",
+      "location": "INT. 观测掩体 / EXT. 荒原",
+      "aspect": "1.43",
+      "synopsis": "套用『静默—爆发』模板。准备动作流程化、固定机位；等待段镜头逐渐变长、声音逐渐抽空；爆炸的光先到，声音延迟四秒。",
+      "shots": [
+        {
+          "id": "1A",
+          "slug": "INT. 观测掩体 — 夜",
+          "size": "MS",
+          "lens": "IMAX 50mm T2.0",
+          "movement": "STATIC",
+          "action": "六个人沿混凝土长桌一字排开，背对镜头，面向观察窗。没有人说话。所有人同时戴上焊接护目镜。",
+          "sound": "通风机低频嗡鸣。远处扩音器的人声听不清内容。",
+          "light": "头顶单排钨丝灯，硬光自上而下；观察窗外是绝对的黑。",
+          "duration": 5,
+          "transition": "CUT",
+          "protect": "2.39",
+          "notes": "上半格留出天花板与灯具，压迫感来自 1.43 的高度。",
+          "practical": "实景混凝土掩体，灯具为画内实用光源。",
+          "image": "panels/1A.png"
+        },
+        {
+          "id": "1B",
+          "slug": "INT. 观测掩体 — 夜",
+          "size": "INS",
+          "lens": "IMAX 80mm micro-macro（1:1）",
+          "movement": "STATIC",
+          "action": "计时器的机械数字翻到 00:47。金属叶片翻转的毛刺清晰可见。",
+          "sound": "机械翻页声，成为本段的剪辑节拍器。",
+          "light": "仪表自身的琥珀色背光，画面其余部分掉进黑。",
+          "duration": 2,
+          "transition": "CUT",
+          "notes": "倒计时插入镜。后续三次回到这里必须用完全相同的机位与构图，只有数字变。",
+          "image": "panels/1B.png"
+        },
+        {
+          "id": "1C",
+          "slug": "INT. 观测掩体 — 夜",
+          "size": "ECU",
+          "lens": "IMAX 80mm T2.0（近对焦改造）",
+          "movement": "STATIC",
+          "action": "主角的脸，护目镜推在额头上，直视画外的观察窗。他没有眨眼。",
+          "dialogue": "（无台词）",
+          "sound": "通风机声开始被抽掉。",
+          "light": "侧面单一钨丝灯，暗面完全不补光。",
+          "duration": 7,
+          "transition": "CUT",
+          "protect": "2.39",
+          "notes": "逼视式特写。焦点薄到只有睫毛实，耳朵已经化开。脸置于画面中央偏下，头顶留出大片天花板。",
+          "image": "panels/1C.jpg"
+        },
+        {
+          "id": "1D",
+          "slug": "EXT. 荒原 — 夜",
+          "size": "EWS",
+          "lens": "IMAX 50mm T2.0",
+          "movement": "STATIC",
+          "action": "空。远处铁塔只是地平线上一个针尖大的剪影。什么都没有发生。",
+          "sound": "绝对静默。",
+          "light": "无月。地平线上一线极微弱的将明未明。",
+          "duration": 6,
+          "transition": "CUT",
+          "notes": "静默格。地平线压到下三分之一，上方三分之二全是夜空。全片声音的最低点。",
+          "image": "panels/1D.jpg"
+        },
+        {
+          "id": "1E",
+          "slug": "EXT. 荒原 — 夜",
+          "size": "EWS",
+          "lens": "IMAX 50mm T2.0",
+          "movement": "STATIC",
+          "action": "同一机位，同一构图。整个画面过曝成白。铁塔消失。",
+          "sound": "依然无声。",
+          "light": "光源本身。曝光冲到顶。",
+          "duration": 2,
+          "transition": "CUT",
+          "notes": "与 1D 严格同机位——变的只有光。光先到，声音后到，这是本段的核心设计。",
+          "practical": "实拍化学爆破 + 现场过曝，不做数字合成。",
+          "image": "panels/1E.png"
+        },
+        {
+          "id": "1F",
+          "slug": "INT. 观测掩体 — 夜",
+          "size": "CU",
+          "lens": "IMAX 80mm T2.0",
+          "movement": "STATIC",
+          "action": "主角的脸被窗外的白光整个照亮，瞳孔缩到最小。四秒后，冲击波到达，掩体震动，尘从天花板落下。他这时才眨眼。",
+          "sound": "四秒静默，然后低频轰鸣与结构受力声同时压满。",
+          "light": "窗外来的强白光，方向与 1C 的钨丝灯完全相反。",
+          "duration": 6,
+          "transition": "CUT TO BLACK",
+          "protect": "2.39",
+          "notes": "声音延迟四秒是本段的题眼。落尘为实拍。",
+          "arrows": [
+            {
+              "type": "subject",
+              "from": [0.62, 0.08],
+              "to": [0.62, 0.55],
+              "label": "落尘"
+            }
+          ],
+          "image": "panels/1F.png"
+        }
+      ]
+    },
+    {
+      "id": "SEQ02",
+      "title": "听证会 — 十四个月后",
+      "timeline": "T+14 months",
+      "location": "INT. 听证室 — 日",
+      "aspect": "2.20",
+      "synopsis": "套用『听证会』模板。同期声对白，走 2.20:1。景别随压力递进收紧；主角回忆闯入时切到 1.43，用画幅的打开标记情绪突破。",
+      "shots": [
+        {
+          "id": "2A",
+          "slug": "INT. 听证室 — 日",
+          "size": "WS",
+          "lens": "Sphero 65 40mm T2.8",
+          "movement": "STATIC",
+          "action": "小房间，低天花板。主角独自坐在中央一把椅子上，三名审问者在长桌后一字排开，位置高出他一头。",
+          "sound": "纸张翻动，椅子摩擦地面。无配乐。",
+          "light": "画右单扇高窗的硬日光，在桌面切出一道亮楔；房间其余部分自然衰减，不补光。",
+          "duration": 8,
+          "transition": "CUT",
+          "notes": "主镜。严格对称，主角在中轴线上。每隔一段回到这一格重新确立空间。",
+          "image": "panels/2A.png"
+        },
+        {
+          "id": "2B",
+          "slug": "INT. 听证室 — 日",
+          "size": "MCU",
+          "lens": "Sphero 65 75mm T2.8",
+          "movement": "STATIC",
+          "action": "审问者，略偏轴。他不看主角，只看文件。",
+          "dialogue": "审问者：你在按下那个开关之前，计算过失败的概率吗。",
+          "sound": "同期声。",
+          "light": "窗光从他背后侧过来，脸偏暗。",
+          "duration": 4,
+          "transition": "CUT",
+          "notes": "审问方保持略远的距离，不给与被审者同等的亲密度。眼神看画左。",
+          "image": "panels/2B.png"
+        },
+        {
+          "id": "2C",
+          "slug": "INT. 听证室 — 日",
+          "size": "CU",
+          "lens": "Sphero 65 100mm T2.8",
+          "movement": "PUSH IN（缓慢）",
+          "action": "主角。他张开嘴，又停住。整整三秒没有回答。",
+          "dialogue": "主角：……计算过。",
+          "sound": "同期声。房间里所有细碎声响在他停顿时被听见。",
+          "light": "窗光正打在他脸上，无处躲藏。",
+          "duration": 9,
+          "transition": "MATCH CUT",
+          "notes": "全段唯一的运动镜头，极缓慢推进。眼神看画右，与 2B 匹配。",
+          "arrows": [
+            {
+              "type": "camera",
+              "from": [0.5, 0.86],
+              "to": [0.5, 0.42],
+              "label": "PUSH IN"
+            }
+          ],
+          "image": "panels/2C.png"
+        },
+        {
+          "id": "2D",
+          "slug": "EXT. 荒原 — 夜（闪回）",
+          "aspect": "1.43",
+          "size": "EWS",
+          "lens": "IMAX 50mm T2.0",
+          "movement": "STATIC",
+          "action": "与 1D 完全相同的机位与构图。空的荒原，针尖大的铁塔。",
+          "sound": "同期声被整个抽掉。绝对静默。",
+          "light": "同 1D。",
+          "duration": 4,
+          "transition": "CUT",
+          "notes": "画幅在此从 2.20 打开到 1.43——画面上下撑开的瞬间就是情绪突破点。与 2C 的匹配剪辑接在他说出『计算过』的尾音上。",
+          "image": "panels/2D.png"
+        }
+      ]
+    }
+  ]
+}
