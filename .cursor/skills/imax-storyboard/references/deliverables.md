@@ -62,7 +62,7 @@
 | `action` | ✅ | 画面里发生什么。**写可见的东西**，不写心理活动 |
 | `dialogue` | | 台词。无台词就留空 |
 | `sound` | | 声音设计提示 |
-| `light` | ✅ | 光源与方向。必须能指认来源 |
+| `light` | ✅ | 光源与**相对画框**的方向（画左/画右/顶光/背光）。必须能指认来源；反打镜记得方向会翻转 |
 | `duration` | ✅ | 秒。用于节奏核算与 previz |
 | `transition` | | `CUT / MATCH CUT / INTERCUT / J-CUT / L-CUT / FADE / CUT TO BLACK` |
 | `protect` | | 画幅保护框，如 `2.39`。装订时画成虚线内框 |
