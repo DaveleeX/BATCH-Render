@@ -54,8 +54,11 @@
 ```
 no anamorphic lens flare, no teal-and-orange grading, no HDR, no oversaturation,
 no digital over-sharpening, no fisheye distortion, no lens flare streaks,
-no text, no watermark, no logos, no UI overlays, no 3D render look
+no text, no watermark, no logos, no UI overlays, no 3D render look,
+no black bars, no letterboxing, no pillarboxing, no borders
 ```
+
+最后一行是画幅相关的：只要提示词里出现 `tall frame`、`vertical`、`near-square` 这类词，模型有时会把一张竖构图**内嵌在画布中间、两侧填黑边**交给你。裁进画格就会露出黑条。所以画幅那段要写成"`composed for a near square 1.43:1 frame, full bleed to all four edges`"，并靠这行排除项兜底。
 
 ## 3. Style Plate 协议
 
@@ -130,8 +133,10 @@ no text, no watermark, no logos, no UI overlays, no 3D render look
 
 每格生成后过一遍，不合格就重生成，不要将就：
 
+- [ ] **动作读得出来吗？**（最重要的一条，见下）
 - [ ] 光源方向和分镜写的一致吗？
 - [ ] 景别对吗？（模型经常把特写画成中景）
+- [ ] 有没有被加上黑边 / 变成内嵌的竖构图？
 - [ ] 画风和 style plate 一致吗？
 - [ ] 角色长得和上一格是同一个人吗？
 - [ ] 关键信息在中央安全区内（能扛住裁切）吗？
@@ -148,3 +153,15 @@ no text, no watermark, no logos, no UI overlays, no 3D render look
 - **眼神**：光写"looking off camera to frame right"往往被理解成"看镜头"。补一句否定式最有效：`he is definitely not looking into the lens`，再加上"他在看画右的谁"，给模型一个动机。
 - **光源方向**：发现方向不对，先回 [镜头语法](shot-grammar.md) 核对——反打镜的光**本来**就该翻到另一侧。是模型没执行，还是你的分镜写漏了方向，处理方式完全不同。
 - **不要靠水平镜像去纠正**。镜像能修好光的方向，但会同时把眼神方向也翻掉，按下葫芦浮起瓢。
+
+### 暗场戏：动作读不出来就等于没画
+
+写"deep shadow / unfilled / 只有一个光源"很容易把画面压到**看不出在发生什么**。分镜的第一职责是沟通调度——一格再有质感，看不懂人在干什么就是废格。
+
+暗场里让动作可读的三个办法：
+
+- **逆光剪影**：把动作放在一片亮区（门口、窗、车灯）前面，人物成为干净的深色剪影。轮廓比细节更好读
+- **点名要边缘光**：`rim lighting his shoulder and back`，给动作一条描边
+- **明确写出"要读得出来"**：`with enough spill that the seat and his body are plainly readable`
+
+成片可以暗到只剩一个轮廓，但**分镜要保证动作可读**。两者不冲突：分镜是给人看懂的，不是最终调色。
