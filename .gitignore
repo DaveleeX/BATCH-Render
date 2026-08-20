@@ -2,3 +2,5 @@ videos/
 *.mp4
 *.blend
 render_video*.mp4
+__pycache__/
+*.pyc
