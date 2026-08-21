@@ -11,7 +11,6 @@
 ```
 carfilm/
 ├── frames/            12 张分镜静帧（1536x1024）
-├── prompts.md         每张静帧的生成描述词
 ├── storyboard.json    分镜表：时长、运镜、裁切、章节字幕
 ├── build_car_film.py  合成主程序
 ├── ambient_score.py   配乐合成器（纯 numpy）
@@ -87,5 +86,4 @@ python3 carfilm/build_car_film.py --keep-work     # 保留中间片段方便排�
 ## 素材说明
 
 `frames/` 里的静帧是为这条片子生成的概念渲染图，造型参考 Gabriel Brando
-Naretto 的 Jaguar Type T Concept，仅作影像练习使用。生成用的描述词都记在
-`prompts.md` 里，想换季节、换城市或者换配色，改那份文件重新出图即可。
+Naretto 的 Jaguar Type T Concept，仅作影像练习使用。
