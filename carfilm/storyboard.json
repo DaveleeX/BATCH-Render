@@ -1,0 +1,299 @@
+{
+  "project": "Jaguar Type T Concept — From the Gallery to the Nordic Streets",
+  "project_zh": "捷豹 Type T 概念车 · 从展厅到北欧小镇",
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "letterbox_height": 800,
+  "transition_duration": 0.7,
+  "title_card": {
+    "duration": 3.4,
+    "line_en": "J A G U A R   T Y P E   T   C O N C E P T",
+    "line_zh": "从展厅到北欧小镇",
+    "line_sub": "A   C I N E M A T I C   D R I V E"
+  },
+  "end_card": {
+    "duration": 3.8,
+    "line_en": "J A G U A R   T Y P E   T   C O N C E P T",
+    "line_zh": "北欧小镇巡游",
+    "line_sub": "Inspired by the Jaguar Type T Concept by Gabriel Brando Naretto"
+  },
+  "shots": [
+    {
+      "id": "shot01",
+      "file": "shot01_studio_hero.jpg",
+      "duration": 4.2,
+      "move": "push_in",
+      "zoom": [
+        1.0,
+        1.1
+      ],
+      "pan": [
+        [
+          0.55,
+          0.5
+        ],
+        [
+          0.5,
+          0.5
+        ]
+      ],
+      "crop_bias": 0.56,
+      "chapter": {
+        "en": "A C T   I   ·   I N   T H E   G A L L E R Y",
+        "zh": "第一幕 · 室内陈列"
+      },
+      "note": "开场英雄镜头：白色展厅内的三分之四前视角，缓慢推进。"
+    },
+    {
+      "id": "shot02",
+      "file": "shot02_studio_grille.jpg",
+      "duration": 3.4,
+      "move": "push_in",
+      "zoom": [
+        1.05,
+        1.16
+      ],
+      "pan": [
+        [
+          0.5,
+          0.5
+        ],
+        [
+          0.48,
+          0.52
+        ]
+      ],
+      "crop_bias": 0.5,
+      "note": "格栅特写：暗调灯光下的细节，强调工艺。"
+    },
+    {
+      "id": "shot03",
+      "file": "shot03_studio_rear.jpg",
+      "duration": 4.0,
+      "move": "pull_out",
+      "zoom": [
+        1.14,
+        1.04
+      ],
+      "pan": [
+        [
+          0.62,
+          0.5
+        ],
+        [
+          0.45,
+          0.5
+        ]
+      ],
+      "crop_bias": 0.56,
+      "note": "车尾三分之四：T 形尾灯签名点亮，镜头后拉展开全貌。"
+    },
+    {
+      "id": "shot04",
+      "file": "shot04_studio_side_detail.jpg",
+      "duration": 3.4,
+      "move": "pan_right",
+      "zoom": [
+        1.1,
+        1.1
+      ],
+      "pan": [
+        [
+          0.32,
+          0.5
+        ],
+        [
+          0.68,
+          0.5
+        ]
+      ],
+      "crop_bias": 0.52,
+      "note": "侧身细节：米金竖条纹与轮辐，横向平移。"
+    },
+    {
+      "id": "shot05",
+      "file": "shot05_gallery_door.jpg",
+      "duration": 4.8,
+      "move": "push_in",
+      "zoom": [
+        1.0,
+        1.12
+      ],
+      "pan": [
+        [
+          0.5,
+          0.5
+        ],
+        [
+          0.62,
+          0.48
+        ]
+      ],
+      "crop_bias": 0.58,
+      "chapter": {
+        "en": "A C T   I I   ·   L E A V I N G   T H E   H A L L",
+        "zh": "第二幕 · 驶出展厅"
+      },
+      "note": "转场关键镜头：展厅大门敞开，门外就是北欧小镇的街道。"
+    },
+    {
+      "id": "shot06",
+      "file": "shot06_town_street_front.jpg",
+      "duration": 4.4,
+      "move": "push_in",
+      "zoom": [
+        1.06,
+        1.15
+      ],
+      "pan": [
+        [
+          0.46,
+          0.52
+        ],
+        [
+          0.52,
+          0.5
+        ]
+      ],
+      "crop_bias": 0.58,
+      "chapter": {
+        "en": "A C T   I I I   ·   T H E   N O R D I C   T O W N",
+        "zh": "第三幕 · 小镇巡游"
+      },
+      "note": "行进跟拍：石板路两侧是芥黄与暗红的木屋，窗内透出暖光。"
+    },
+    {
+      "id": "shot07",
+      "file": "shot07_town_street_rear.jpg",
+      "duration": 4.2,
+      "move": "pull_out",
+      "zoom": [
+        1.14,
+        1.04
+      ],
+      "pan": [
+        [
+          0.5,
+          0.52
+        ],
+        [
+          0.5,
+          0.48
+        ]
+      ],
+      "crop_bias": 0.6,
+      "note": "车尾跟拍：驶向小镇深处，尾灯签名在雾气里发亮。"
+    },
+    {
+      "id": "shot08",
+      "file": "shot08_wheel_level.jpg",
+      "duration": 3.2,
+      "move": "push_in",
+      "zoom": [
+        1.08,
+        1.2
+      ],
+      "pan": [
+        [
+          0.5,
+          0.55
+        ],
+        [
+          0.44,
+          0.58
+        ]
+      ],
+      "crop_bias": 0.52,
+      "note": "贴地轮组镜头：湿石板拉出速度感。"
+    },
+    {
+      "id": "shot09",
+      "file": "shot09_canal_bridge.jpg",
+      "duration": 4.4,
+      "move": "pan_right",
+      "zoom": [
+        1.08,
+        1.08
+      ],
+      "pan": [
+        [
+          0.3,
+          0.5
+        ],
+        [
+          0.7,
+          0.5
+        ]
+      ],
+      "crop_bias": 0.52,
+      "note": "运河石桥：水面倒影与木屋群，横移展现小镇全景。"
+    },
+    {
+      "id": "shot10",
+      "file": "shot10_cafe_dusk.jpg",
+      "duration": 4.6,
+      "move": "push_in",
+      "zoom": [
+        1.02,
+        1.11
+      ],
+      "pan": [
+        [
+          0.5,
+          0.5
+        ],
+        [
+          0.56,
+          0.5
+        ]
+      ],
+      "crop_bias": 0.56,
+      "note": "街角咖啡馆：串灯与暖窗，车停在路边，最温馨的一幕。"
+    },
+    {
+      "id": "shot11",
+      "file": "shot11_lamplight_night.jpg",
+      "duration": 4.4,
+      "move": "pull_out",
+      "zoom": [
+        1.12,
+        1.02
+      ],
+      "pan": [
+        [
+          0.5,
+          0.46
+        ],
+        [
+          0.5,
+          0.52
+        ]
+      ],
+      "crop_bias": 0.62,
+      "note": "路灯下的蓝调时刻：镜头后拉，把车放回小镇环境里。"
+    },
+    {
+      "id": "shot12",
+      "file": "shot12_town_wide.jpg",
+      "duration": 5.2,
+      "move": "pull_out",
+      "zoom": [
+        1.12,
+        1.0
+      ],
+      "pan": [
+        [
+          0.5,
+          0.6
+        ],
+        [
+          0.5,
+          0.5
+        ]
+      ],
+      "crop_bias": 0.66,
+      "note": "收尾大全景：俯瞰灯火通明的小镇与远处峡湾，车沿石板路远去。"
+    }
+  ]
+}
